@@ -1,0 +1,14 @@
+# Secrets — never commit, use .env.example as the template instead
+.env
+
+# Build output
+*.exe
+
+# Runtime data — user uploads, generated reports, logs (not source)
+/uploads/
+/generated_reports/
+*.log
+
+# Editor/OS cruft
+.vscode/
+Thumbs.db

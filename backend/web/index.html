@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Báo cáo ngày BDSC</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f5f7; color: #222; }
+  header { background: #0b4f8a; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  #logoutBtn { background: #fff; color: #0b4f8a; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+  nav { display: flex; gap: 4px; background: #fff; padding: 0 20px; border-bottom: 1px solid #ddd; }
+  nav button { border: none; background: none; padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
+  nav button.active { border-bottom-color: #0b4f8a; font-weight: 600; color: #0b4f8a; }
+  main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .panel { display: none; background: #fff; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .panel.active { display: block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f0f2f5; }
+  form.entry { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin-bottom: 4px; }
+  form.entry label { display: flex; flex-direction: column; font-size: 11px; color: #666; }
+  form.entry input, form.entry textarea, form.entry select { padding: 5px; font-size: 12.5px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
+  form.entry textarea { resize: vertical; height: 54px; box-sizing: border-box; }
+  form.entry .full { grid-column: 1 / -1; }
+  form.entry .half { grid-column: span 2; }
+  form.entry .newrow { grid-column-start: 1; }
+  form.entry .newrow.half { grid-column: 1 / span 2; }
+  .btn { background: #0b4f8a; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+  .btn.danger { background: #c0392b; padding: 4px 10px; font-size: 12px; }
+  #loginScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
+  #loginBox { background: #fff; padding: 30px; border-radius: 8px; width: 300px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  #loginBox input { width: 100%; box-sizing: border-box; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 4px; }
+  #loginErr { color: #c0392b; font-size: 13px; min-height: 16px; }
+  .thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 3px; margin: 2px; }
+  .kpi-table { text-align: center; }
+  .kpi-table th { text-align: center; vertical-align: middle; }
+  .kpi-table td { text-align: center; vertical-align: middle; }
+  .kpi-table td.left { text-align: left; }
+  .kpi-table input, .kpi-table select { width: 100%; box-sizing: border-box; text-align: center; border: 1px solid #ccc; border-radius: 3px; padding: 4px; font-family: inherit; font-size: 13px; }
+  #app { display: none; }
+  .report-view { font-family: "Times New Roman", Times, serif; }
+  .report-view .rv-org { text-align: center; font-weight: bold; font-size: 14px; margin: 0; }
+  .report-view .rv-company { text-align: center; font-weight: bold; font-size: 17px; margin: 2px 0; }
+  .report-view .rv-title { text-align: center; font-weight: bold; font-size: 19px; margin: 14px 0 4px; }
+  .report-view .rv-meta { text-align: center; font-style: italic; font-size: 13px; margin-bottom: 16px; color: #444; }
+  .report-view .rv-heading { font-weight: bold; font-size: 15px; margin: 18px 0 6px; }
+  .report-view .rv-sub { font-weight: bold; font-size: 13.5px; margin: 10px 0 4px; }
+  .report-view table { margin-top: 0; }
+  .report-view .rv-nodata { border: 1px solid #ddd; padding: 8px; text-align: center; font-style: italic; color: #888; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div id="loginBox">
+    <h2>Đăng nhập</h2>
+    <input id="loginCode" placeholder="Mã nhân viên">
+    <input id="loginPw" type="password" placeholder="Mật khẩu">
+    <div id="loginErr"></div>
+    <button class="btn" style="width:100%" onclick="doLogin()">Đăng nhập</button>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>Báo cáo ngày BDSC — <span id="whoami"></span></h1>
+    <button id="logoutBtn" onclick="logout()">Đăng xuất</button>
+  </header>
+  <nav id="tabs"></nav>
+  <main>
+    <section id="panel-suco" class="panel">
+      <form class="entry" id="form-suco">
+        <label>Thiết bị<input name="thietBi" list="assets-suco" autocomplete="off" required><datalist id="assets-suco"></datalist></label>
+        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+        <label>TG dừng PX (h)<input name="thoiGianDungPX" type="number" step="any"></label>
+        <label>TG dừng TB (h)<input name="thoiGianDungTB" type="number" step="any"></label>
+        <label class="half">Tình trạng<textarea name="tinhTrang"></textarea></label>
+        <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
+        <label>Đơn vị thực hiện<input name="donVi"></label>
+        <label>Thời hạn<input name="thoiHan" type="date"></label>
+        <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
+        <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+        <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
+      </form>
+      <div style="overflow-x:auto"><table id="table-suco"></table></div>
+    </section>
+
+    <section id="panel-giamsat" class="panel">
+      <form class="entry" id="form-giamsat">
+        <label>Thiết bị<input name="thietBi" list="assets-giamsat" autocomplete="off" required><datalist id="assets-giamsat"></datalist></label>
+        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+        <label class="half newrow">Tình trạng<textarea name="tinhTrang"></textarea></label>
+        <label class="half">Rủi ro<textarea name="ruiRo"></textarea></label>
+        <label class="full">Phương án xử lý<textarea name="phuongAn"></textarea></label>
+        <label>Đơn vị thực hiện<input name="donVi"></label>
+        <label>Thời hạn<input name="thoiHan" type="date"></label>
+        <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
+        <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+        <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
+      </form>
+      <div style="overflow-x:auto"><table id="table-giamsat"></table></div>
+    </section>
+
+    <section id="panel-congviec" class="panel">
+      <form class="entry" id="form-congviec">
+        <label>Thiết bị<input name="thietBi" list="assets-congviec" autocomplete="off" required><datalist id="assets-congviec"></datalist></label>
+        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+        <label class="half newrow">Nội dung công việc<textarea name="noiDung"></textarea></label>
+        <label>Kế hoạch<input name="keHoach"></label>
+        <label>Tiến độ (%)<input name="tienDo" type="number" step="any"></label>
+        <label class="half newrow">Thực hiện hôm nay<textarea name="homNay"></textarea></label>
+        <label class="half">Kế hoạch ngày mai<textarea name="ngayMai"></textarea></label>
+        <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
+        <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+        <label class="full">Hình ảnh<input name="photos" type="file" multiple accept="image/*"></label>
+        <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
+      </form>
+      <div style="overflow-x:auto"><table id="table-congviec"></table></div>
+    </section>
+
+    <section id="panel-cbm" class="panel">
+      <p>Dữ liệu tự động từ hệ thống giám sát trực tuyến (file Excel đồng bộ hàng ngày) — chỉ xem, không nhập/sửa được ở đây. Hiển thị đúng khung giờ sẽ đưa vào báo cáo hôm nay.</p>
+      <table id="table-cbm"></table>
+    </section>
+
+    <section id="panel-thongke" class="panel">
+      <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label>Chọn ngày: <input type="date" id="thongke-date"></label>
+        <button class="btn" onclick="loadThongKe()" style="margin-top:0">Xem báo cáo</button>
+        <span id="thongke-admin-tools" hidden>
+          <button class="btn" style="margin-top:0" onclick="runReportNow()">Chạy sinh báo cáo (ngày đã chọn)</button>
+          <button class="btn" style="margin-top:0; margin-left:10px" onclick="sendTestEmail()">Sinh báo cáo + Gửi email test</button>
+        </span>
+      </div>
+      <div id="runResult"></div>
+      <div id="thongke-content"></div>
+    </section>
+
+    <section id="panel-kpi" class="panel">
+      <p>Nhập đủ 5 chỉ tiêu rồi bấm Lưu — mỗi lần lưu sẽ ghi đè số liệu KPI của hôm nay.</p>
+      <table id="table-kpi-edit" class="kpi-table">
+        <thead>
+          <tr>
+            <th rowspan="2">TT</th>
+            <th rowspan="2">Nhóm</th>
+            <th rowspan="2">Chỉ tiêu</th>
+            <th rowspan="2">ĐVT</th>
+            <th colspan="2">Hôm nay</th>
+            <th rowspan="2">Lũy kế tháng</th>
+            <th rowspan="2">Đánh giá</th>
+          </tr>
+          <tr><th>KH</th><th>TH</th></tr>
+        </thead>
+        <tbody id="kpi-rows"></tbody>
+      </table>
+      <button class="btn" onclick="saveKPI()">Lưu KPI</button>
+    </section>
+
+    <section id="panel-admin" class="panel">
+      <h3>Tạo tài khoản mới</h3>
+      <form class="entry" id="form-user">
+        <label>Mã nhân viên<input name="employeeCode" required></label>
+        <label>Họ tên<input name="fullName"></label>
+        <label>Mật khẩu<input name="password" type="password" required></label>
+        <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin)<input name="roles"></label>
+        <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
+      </form>
+    </section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+package models
+
+import "time"
+
+type User struct {
+	Id           int
+	EmployeeCode string
+	FullName     string
+	PasswordHash string
+	Roles        string // comma-separated: SuCo,GiamSat,CongViec,KPI,Admin
+}
+
+type SuCo struct {
+	Id             int       `json:"id"`
+	TT             int       `json:"tt"`
+	ThietBi        string    `json:"thietBi"`
+	DM             string    `json:"dm"`
+	TinhTrang      string    `json:"tinhTrang"`
+	ThoiGianDungPX *float64  `json:"thoiGianDungPX"`
+	ThoiGianDungTB *float64  `json:"thoiGianDungTB"`
+	PhuongAn       string    `json:"phuongAn"`
+	DonVi          string    `json:"donVi"`
+	ThoiHan        NullDate  `json:"thoiHan"`
+	DeXuat         string    `json:"deXuat"`
+	LuuY           string    `json:"luuY"`
+	NgayBaoCao     time.Time `json:"ngayBaoCao"`
+	CreatedBy      string    `json:"createdBy"`
+}
+
+type GiamSat struct {
+	Id         int       `json:"id"`
+	TT         int       `json:"tt"`
+	ThietBi    string    `json:"thietBi"`
+	DM         string    `json:"dm"`
+	TinhTrang  string    `json:"tinhTrang"`
+	RuiRo      string    `json:"ruiRo"`
+	PhuongAn   string    `json:"phuongAn"`
+	DonVi      string    `json:"donVi"`
+	ThoiHan    NullDate  `json:"thoiHan"`
+	DeXuat     string    `json:"deXuat"`
+	LuuY       string    `json:"luuY"`
+	NgayBaoCao time.Time `json:"ngayBaoCao"`
+	CreatedBy  string    `json:"createdBy"`
+}
+
+type Attachment struct {
+	Id          int    `json:"id"`
+	CongViecId  int    `json:"congViecId"`
+	FileName    string `json:"fileName"`
+	FilePath    string `json:"filePath"`
+	ContentType string `json:"contentType"`
+}
+
+type CongViec struct {
+	Id          int          `json:"id"`
+	TT          int          `json:"tt"`
+	ThietBi     string       `json:"thietBi"`
+	DM          string       `json:"dm"`
+	NoiDung     string       `json:"noiDung"`
+	KeHoach     string       `json:"keHoach"`
+	TienDo      *float64     `json:"tienDo"`
+	HomNay      string       `json:"homNay"`
+	NgayMai     string       `json:"ngayMai"`
+	DeXuat      string       `json:"deXuat"`
+	LuuY        string       `json:"luuY"`
+	NgayBaoCao  time.Time    `json:"ngayBaoCao"`
+	CreatedBy   string       `json:"createdBy"`
+	Attachments []Attachment `json:"attachments"`
+}
+
+type KPIEntry struct {
+	Id         int       `json:"id"`
+	ChiTieu    string    `json:"chiTieu"`
+	Nhom       string    `json:"nhom"`
+	DVT        string    `json:"dvt"`
+	KeHoach    *float64  `json:"keHoach"`
+	ThucHien   *float64  `json:"thucHien"`
+	LuyKeThang *float64  `json:"luyKeThang"`
+	DanhGia    string    `json:"danhGia"`
+	NgayBaoCao time.Time `json:"ngayBaoCao"`
+	CreatedBy  string    `json:"createdBy"`
+}
+
+// CBMRow mirrors a row read from the daily-synced CBM Excel file (produced
+// by the external online-monitoring system, unrelated to this app's own
+// data entry).
+type CBMRow struct {
+	Tagname     string    `json:"tagname"`
+	DataTime    time.Time `json:"dataTime"`
+	Equipment   string    `json:"equipment"`
+	Description string    `json:"description"`
+	AlarmValue  string    `json:"alarmValue"`
+	AlarmLevel  string    `json:"alarmLevel"`
+}

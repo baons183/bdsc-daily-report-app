@@ -1,0 +1,513 @@
+package report
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/go-pdf/fpdf"
+
+	"bdscdailyreport/internal/models"
+)
+
+const (
+	marginLeft  = 10.0
+	marginRight = 10.0
+	pageWidth   = 210.0 // A4
+	pageBottom  = 280.0
+	usableWidth = pageWidth - marginLeft - marginRight
+	lineHt      = 5.0
+)
+
+type builder struct {
+	pdf        *fpdf.Fpdf
+	uploadsDir string
+}
+
+func newBuilder() *builder {
+	pdf := fpdf.NewCustom(&fpdf.InitType{
+		OrientationStr: "P",
+		UnitStr:        "mm",
+		SizeStr:        "A4",
+	})
+	pdf.SetMargins(marginLeft, 10, marginRight)
+	pdf.SetAutoPageBreak(true, 15)
+
+	timesPath := `C:\Windows\Fonts\times.ttf`
+	timesBoldPath := `C:\Windows\Fonts\timesbd.ttf`
+	timesItalicPath := `C:\Windows\Fonts\timesi.ttf`
+	if _, err := os.Stat(timesPath); err == nil {
+		pdf.AddUTF8Font("Times", "", timesPath)
+	}
+	if _, err := os.Stat(timesBoldPath); err == nil {
+		pdf.AddUTF8Font("Times", "B", timesBoldPath)
+	}
+	if _, err := os.Stat(timesItalicPath); err == nil {
+		pdf.AddUTF8Font("Times", "I", timesItalicPath)
+	}
+	pdf.AddPage()
+	pdf.SetFont("Times", "", 11)
+	return &builder{pdf: pdf}
+}
+
+const (
+	logoBSRPath = "assets/logo-bsr.png"
+	logoMNTPath = "assets/logo-mnt.jpg"
+	logoHeight  = 20.0
+)
+
+// letterhead reproduces the exact bordered letterhead of the original Word
+// report: a 2-row/2-col box (logo | company+department name / report
+// heading) followed by a 3-row memo box (Kính gửi / Copy / Nội dung+Ngày).
+func (b *builder) letterhead(runAt, start, end string) {
+	pdf := b.pdf
+	x0, y0 := marginLeft, pdf.GetY()
+	pdf.SetLineWidth(0.3)
+
+	// ---- Box 1: logo + titles ----
+	logoW := 38.0
+	textW := usableWidth - logoW
+	row1H, row2H := 17.0, 9.0
+	tbl1H := row1H + row2H
+
+	pdf.Rect(x0, y0, logoW, tbl1H, "D")
+	pdf.Rect(x0+logoW, y0, textW, row1H, "D")
+	pdf.Rect(x0+logoW, y0+row1H, textW, row2H, "D")
+
+	if _, err := os.Stat(logoBSRPath); err == nil {
+		lw, lh := logoW-8, tbl1H-8
+		if info := pdf.RegisterImageOptions(logoBSRPath, fpdf.ImageOptions{ImageType: "PNG"}); info != nil {
+			if iw, ih := info.Extent(); iw > 0 && ih > 0 {
+				scale := lw / iw
+				if lh/ih < scale {
+					scale = lh / ih
+				}
+				lw, lh = iw*scale, ih*scale
+			}
+		}
+		pdf.ImageOptions(logoBSRPath, x0+(logoW-lw)/2, y0+(tbl1H-lh)/2, lw, lh, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+	}
+
+	pdf.SetXY(x0+logoW, y0+3)
+	pdf.SetFont("Times", "B", 12)
+	pdf.CellFormat(textW, 6, "TỔNG CÔNG TY LỌC HÓA DẦU VIỆT NAM", "", 2, "C", false, 0, "")
+	pdf.SetX(x0 + logoW)
+	pdf.CellFormat(textW, 6, "BAN BẢO DƯỠNG SỬA CHỮA", "", 2, "C", false, 0, "")
+
+	pdf.SetXY(x0+logoW, y0+row1H+1.5)
+	pdf.CellFormat(textW, 6, "BÁO CÁO BẢO DƯỠNG SỬA CHỮA", "", 0, "C", false, 0, "")
+
+	// ---- Box 2: memo (Kính gửi / Copy / Nội dung+Ngày) ----
+	y := y0 + tbl1H
+	labelW := 28.0
+	contentW := usableWidth - labelW
+	r1H, r2H, r3H := 7.0, 12.0, 8.0
+	ngayW := 60.0
+	boldContentW := contentW - ngayW
+
+	pdf.Rect(x0, y, labelW, r1H, "D")
+	pdf.Rect(x0+labelW, y, contentW, r1H, "D")
+	pdf.Rect(x0, y+r1H, labelW, r2H, "D")
+	pdf.Rect(x0+labelW, y+r1H, contentW, r2H, "D")
+	pdf.Rect(x0, y+r1H+r2H, labelW, r3H, "D")
+	pdf.Rect(x0+labelW, y+r1H+r2H, boldContentW, r3H, "D")
+	pdf.Rect(x0+labelW+boldContentW, y+r1H+r2H, ngayW, r3H, "D")
+
+	pdf.SetFont("Times", "", 10.5)
+	pdf.SetXY(x0+2, y+1.5)
+	pdf.CellFormat(labelW-2, 5, "Kính gửi:", "", 0, "L", false, 0, "")
+	pdf.SetXY(x0+labelW+2, y+1.5)
+	pdf.CellFormat(contentW-2, 5, "-  Ban Giám đốc Nhà máy", "", 0, "L", false, 0, "")
+
+	pdf.SetXY(x0+2, y+r1H+1.5)
+	pdf.CellFormat(labelW-2, 5, "Copy:", "", 0, "L", false, 0, "")
+	pdf.SetXY(x0+labelW+2, y+r1H+1.5)
+	pdf.MultiCell(contentW-4, 5.5, "-  Ban VHSX, KHSX, KTSX (để p/h).\n-  Lưu BDSC.", "", "L", false)
+
+	pdf.SetXY(x0+2, y+r1H+r2H+2)
+	pdf.CellFormat(labelW-2, 5, "Nội dung", "", 0, "L", false, 0, "")
+	pdf.SetFont("Times", "B", 10.5)
+	pdf.SetXY(x0+labelW+2, y+r1H+r2H+2)
+	pdf.CellFormat(boldContentW-4, 5, "Báo cáo ngày công tác bảo dưỡng sửa chữa", "", 0, "L", false, 0, "")
+	pdf.SetFont("Times", "", 10.5)
+	pdf.SetXY(x0+labelW+boldContentW+2, y+r1H+r2H+2)
+	pdf.CellFormat(ngayW-4, 5, "Ngày: "+runAt, "", 0, "L", false, 0, "")
+
+	pdf.SetY(y + r1H + r2H + r3H + 4)
+	pdf.Ln(2)
+}
+
+// signatureBlock reproduces the "NGƯỜI LẬP / PHÊ DUYỆT" sign-off row at the
+// end of the original Word report.
+func (b *builder) signatureBlock() {
+	pdf := b.pdf
+	if pdf.GetY() > pageBottom-35 {
+		pdf.AddPage()
+	}
+	pdf.Ln(6)
+	half := usableWidth / 2
+	pdf.SetFont("Times", "B", 11)
+	pdf.CellFormat(half, 6, "NGƯỜI LẬP", "", 0, "C", false, 0, "")
+	pdf.CellFormat(half, 6, "PHÊ DUYỆT", "", 1, "C", false, 0, "")
+	pdf.SetFont("Times", "I", 9)
+	pdf.CellFormat(half, 5, "(Ký, ghi rõ họ tên)", "", 0, "C", false, 0, "")
+	pdf.CellFormat(half, 5, "(Ký, ghi rõ họ tên)", "", 1, "C", false, 0, "")
+	pdf.SetFont("Times", "", 11)
+}
+
+func (b *builder) title(text string, size float64) {
+	b.pdf.SetFont("Times", "B", size)
+	b.pdf.CellFormat(usableWidth, 8, text, "", 1, "C", false, 0, "")
+	b.pdf.SetFont("Times", "", 11)
+}
+
+func (b *builder) heading(text string) {
+	b.pdf.Ln(2)
+	b.pdf.SetFont("Times", "B", 12)
+	b.pdf.CellFormat(usableWidth, 7, text, "", 1, "L", false, 0, "")
+	b.pdf.SetFont("Times", "", 11)
+}
+
+func (b *builder) subheading(text string) {
+	b.pdf.SetFont("Times", "B", 11)
+	b.pdf.CellFormat(usableWidth, 6, text, "", 1, "L", false, 0, "")
+	b.pdf.SetFont("Times", "", 11)
+}
+
+func (b *builder) paragraph(text string) {
+	b.pdf.MultiCell(usableWidth, lineHt, text, "", "L", false)
+}
+
+// table renders a bordered table with word-wrapped cells and manual row
+// height (each row is as tall as its tallest wrapped cell needs).
+func (b *builder) table(headers []string, widths []float64, rows [][]string) {
+	pdf := b.pdf
+	if len(rows) == 0 {
+		pdf.SetFont("Times", "I", 10)
+		pdf.CellFormat(usableWidth, 6, "Các thiết bị hoạt động ổn định.", "1", 1, "C", false, 0, "")
+		pdf.SetFont("Times", "", 11)
+		return
+	}
+	drawHeader := func() {
+		pdf.SetFont("Times", "B", 9)
+		pdf.SetFillColor(224, 224, 224)
+		for i, h := range headers {
+			pdf.CellFormat(widths[i], 7, h, "1", 0, "C", true, 0, "")
+		}
+		pdf.Ln(-1)
+		pdf.SetFont("Times", "", 9)
+	}
+	if pdf.GetY()+20 > pageBottom {
+		pdf.AddPage()
+	}
+	drawHeader()
+
+	for _, row := range rows {
+		maxLines := 1
+		cellLines := make([][]string, len(row))
+		for i, cell := range row {
+			raw := pdf.SplitLines([]byte(cell), widths[i]-2)
+			var lines []string
+			for _, l := range raw {
+				lines = append(lines, string(l))
+			}
+			if len(lines) == 0 {
+				lines = []string{""}
+			}
+			cellLines[i] = lines
+			if len(lines) > maxLines {
+				maxLines = len(lines)
+			}
+		}
+		rowH := float64(maxLines)*4.2 + 1.5
+
+		if pdf.GetY()+rowH > pageBottom {
+			pdf.AddPage()
+			drawHeader()
+		}
+		x, y := pdf.GetX(), pdf.GetY()
+		for i := range row {
+			pdf.Rect(x, y, widths[i], rowH, "D")
+			pdf.SetXY(x+1, y+0.75)
+			pdf.MultiCell(widths[i]-2, 4.2, strings.Join(cellLines[i], "\n"), "", "L", false)
+			x += widths[i]
+		}
+		pdf.SetXY(marginLeft, y+rowH)
+	}
+	pdf.Ln(2)
+}
+
+func fmtFloat(f *float64) string {
+	if f == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*f, 'f', -1, 64)
+}
+
+// fmtFloatOrZero is fmtFloat with "0" instead of blank for a missing value —
+// used only for the KPI table, where an un-entered figure should read as 0
+// rather than an empty cell.
+func fmtFloatOrZero(f *float64) string {
+	if f == nil {
+		return "0"
+	}
+	return strconv.FormatFloat(*f, 'f', -1, 64)
+}
+
+func fmtDate(d models.NullDate) string {
+	if !d.Valid {
+		return ""
+	}
+	return d.Time.Format("02/01/2006")
+}
+
+// ---- section renderers ----
+
+// kpiCategories are the 5 fixed KPI rows the report always shows, matching
+// the web KPI tab's KPI_CATEGORIES exactly — the PDF renders all 5 every
+// day regardless of what was actually saved, defaulting a missing figure to
+// 0 and a missing Đánh giá to "Đạt" rather than leaving a blank/missing row.
+var kpiCategories = []struct{ ChiTieu, Nhom, DVT string }{
+	{"Sự cố", "Sự cố", "Vụ"},
+	{"Near Miss", "Sự cố", "Vụ"},
+	{"Technical event", "Sự cố", "Vụ"},
+	{"Rework", "Chất lượng", "WO"},
+	{"Dừng ngoài kế hoạch", "Hỏng thiết bị", "Vụ"},
+}
+
+func (b *builder) sectionKPI(rows []models.KPIEntry) {
+	b.heading("1. CÁC CHỈ SỐ KPI")
+	headers := []string{"Chỉ tiêu", "Nhóm", "ĐVT", "Kế hoạch", "Thực hiện", "Lũy kế tháng", "Đánh giá"}
+	widths := []float64{50, 25, 15, 22, 22, 26, 30}
+	byChiTieu := map[string]models.KPIEntry{}
+	for _, k := range rows {
+		byChiTieu[k.ChiTieu] = k
+	}
+	var data [][]string
+	for _, cat := range kpiCategories {
+		k, ok := byChiTieu[cat.ChiTieu]
+		dvt := cat.DVT
+		if ok && k.DVT != "" {
+			dvt = k.DVT
+		}
+		danhGia := "Đạt"
+		if ok && strings.TrimSpace(k.DanhGia) != "" {
+			danhGia = k.DanhGia
+		}
+		data = append(data, []string{cat.ChiTieu, cat.Nhom, dvt, fmtFloatOrZero(k.KeHoach), fmtFloatOrZero(k.ThucHien), fmtFloatOrZero(k.LuyKeThang), danhGia})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionSuCo(rows []models.SuCo) {
+	b.heading("2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
+	headers := []string{"TT", "Thiết bị", "ĐM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"}
+	widths := []float64{8, 38, 16, 34, 14, 14, 32, 20, 14}
+	var data [][]string
+	for _, s := range rows {
+		data = append(data, []string{
+			strconv.Itoa(s.TT), s.ThietBi, s.DM, s.TinhTrang,
+			fmtFloat(s.ThoiGianDungPX), fmtFloat(s.ThoiGianDungTB), s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan),
+		})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionCBM(rows []models.CBMRow) {
+	b.subheading("3.1. Giám sát trực tuyến (online monitoring)")
+	headers := []string{"TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"}
+	widths := []float64{8, 20, 26, 32, 50, 27, 27}
+	var data [][]string
+	for i, c := range rows {
+		data = append(data, []string{strconv.Itoa(i + 1), c.DataTime.Format("15:04 02/01"), c.Tagname, c.Equipment, c.Description, c.AlarmValue, c.AlarmLevel})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionGiamSat(rows []models.GiamSat) {
+	b.subheading("3.2. Chẩn đoán bằng tool chuyên dụng")
+	headers := []string{"TT", "Thiết bị", "ĐM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
+	widths := []float64{8, 34, 12, 36, 30, 36, 20, 14}
+	var data [][]string
+	for _, s := range rows {
+		data = append(data, []string{strconv.Itoa(s.TT), s.ThietBi, s.DM, s.TinhTrang, s.RuiRo, s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan)})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionCongViec(rows []models.CongViec) {
+	b.heading("4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG")
+	headers := []string{"TT", "Thiết bị", "ĐM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"}
+	widths := []float64{8, 25, 12, 40, 25, 18, 40, 22}
+	var data [][]string
+	for _, c := range rows {
+		data = append(data, []string{strconv.Itoa(c.TT), c.ThietBi, c.DM, c.NoiDung, c.KeHoach, fmtFloat(c.TienDo), c.HomNay, c.NgayMai})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionDeXuat(suco []models.SuCo, giamsat []models.GiamSat, congviec []models.CongViec) {
+	b.heading("5. VẤN ĐỀ CẦN ĐỀ XUẤT")
+	headers := []string{"TT", "Thiết bị", "Đề xuất"}
+	widths := []float64{10, 45, 135}
+	var data [][]string
+	for _, it := range CombineDeXuat(suco, giamsat, congviec) {
+		data = append(data, []string{strconv.Itoa(it.TT), it.ThietBi, it.Note})
+	}
+	b.table(headers, widths, data)
+}
+
+func (b *builder) sectionLuuY(suco []models.SuCo, giamsat []models.GiamSat, congviec []models.CongViec) {
+	b.heading("6. LƯU Ý QUAN TRỌNG")
+	headers := []string{"TT", "Thiết bị", "Lưu ý"}
+	widths := []float64{10, 45, 135}
+	var data [][]string
+	for _, it := range CombineLuuY(suco, giamsat, congviec) {
+		data = append(data, []string{strconv.Itoa(it.TT), it.ThietBi, it.Note})
+	}
+	b.table(headers, widths, data)
+}
+
+// sectionImages renders the same 3-column table (TT | Nội dung | Hình ảnh)
+// as the original Word report — one bordered row per photo, with the actual
+// image fitted (aspect-preserved) inside its cell, rather than a loose grid.
+func (b *builder) sectionImages(rows []models.CongViec) {
+	type photo struct {
+		path    string
+		thietBi string
+	}
+	var photos []photo
+	for _, c := range rows {
+		for _, a := range c.Attachments {
+			full := filepath.Join(b.uploadsDir, filepath.FromSlash(a.FilePath))
+			if _, err := os.Stat(full); err != nil {
+				continue
+			}
+			photos = append(photos, photo{path: full, thietBi: c.ThietBi})
+		}
+	}
+	b.heading("7. MỘT SỐ HÌNH ẢNH THỰC HIỆN CÔNG VIỆC TẠI HIỆN TRƯỜNG")
+	pdf := b.pdf
+	if len(photos) == 0 {
+		pdf.SetFont("Times", "I", 10)
+		pdf.CellFormat(usableWidth, 6, "(Không có dữ liệu)", "1", 1, "C", false, 0, "")
+		pdf.SetFont("Times", "", 11)
+		return
+	}
+
+	// Group consecutive photos that share the same Thiết bị so their TT and
+	// Nội dung cells can be merged into one spanning cell, matching how the
+	// original Word table looked when several photos belonged to the same
+	// work item.
+	type group struct {
+		thietBi string
+		photos  []photo
+	}
+	var groups []group
+	for _, p := range photos {
+		if n := len(groups); n > 0 && groups[n-1].thietBi == p.thietBi {
+			groups[n-1].photos = append(groups[n-1].photos, p)
+		} else {
+			groups = append(groups, group{thietBi: p.thietBi, photos: []photo{p}})
+		}
+	}
+
+	colTT, colThiet := 12.0, 38.0
+	colImg := usableWidth - colTT - colThiet
+	rowH := 55.0
+
+	drawHeader := func() {
+		pdf.SetFont("Times", "B", 9)
+		pdf.SetFillColor(224, 224, 224)
+		pdf.CellFormat(colTT, 7, "TT", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colThiet, 7, "Nội dung", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colImg, 7, "Hình ảnh", "1", 1, "C", true, 0, "")
+		pdf.SetFont("Times", "", 9)
+	}
+	if pdf.GetY()+7+rowH > pageBottom {
+		pdf.AddPage()
+	}
+	drawHeader()
+
+	for gi, g := range groups {
+		groupH := float64(len(g.photos)) * rowH
+		if pdf.GetY()+groupH > pageBottom {
+			pdf.AddPage()
+			drawHeader()
+		}
+		x, y := pdf.GetX(), pdf.GetY()
+
+		pdf.Rect(x, y, colTT, groupH, "D")
+		pdf.Rect(x+colTT, y, colThiet, groupH, "D")
+		pdf.SetXY(x, y+groupH/2-2.5)
+		pdf.CellFormat(colTT, 5, strconv.Itoa(gi+1), "", 0, "C", false, 0, "")
+		thietBiLines := pdf.SplitLines([]byte(g.thietBi), colThiet-3)
+		thietBiH := float64(len(thietBiLines)) * 5.0
+		pdf.SetXY(x+colTT+1.5, y+(groupH-thietBiH)/2)
+		pdf.MultiCell(colThiet-3, 5, g.thietBi, "", "L", false)
+
+		for pi, p := range g.photos {
+			py := y + float64(pi)*rowH
+			pdf.Rect(x+colTT+colThiet, py, colImg, rowH, "D")
+
+			imgType, data, prepErr := preparePDFImage(p.path)
+			if prepErr != nil {
+				pdf.SetXY(x+colTT+colThiet, py+rowH/2-2.5)
+				pdf.SetFont("Times", "I", 9)
+				pdf.CellFormat(colImg, 5, "(Không hiển thị được ảnh này)", "", 0, "C", false, 0, "")
+				pdf.SetFont("Times", "", 9)
+				continue
+			}
+			iw, ih := colImg-6, rowH-6
+			if info := pdf.RegisterImageOptionsReader(p.path, fpdf.ImageOptions{ImageType: imgType}, bytes.NewReader(data)); info != nil {
+				if w0, h0 := info.Extent(); w0 > 0 && h0 > 0 {
+					scale := iw / w0
+					if ih/h0 < scale {
+						scale = ih / h0
+					}
+					iw, ih = w0*scale, h0*scale
+				}
+			}
+			imgX := x + colTT + colThiet + (colImg-iw)/2
+			imgY := py + (rowH-ih)/2
+			pdf.ImageOptions(p.path, imgX, imgY, iw, ih, false, fpdf.ImageOptions{ImageType: imgType}, 0, "")
+		}
+
+		pdf.SetXY(x, y+groupH)
+	}
+	pdf.Ln(2)
+}
+
+// Generate builds the full daily-report PDF for the window [start, end] and
+// writes it to outDir, returning the file path.
+func Generate(cfg BuildInput) (string, error) {
+	b := newBuilder()
+	b.uploadsDir = cfg.UploadsDir
+
+	b.letterhead(cfg.RunAt.Format("02/01/2006"), cfg.Start.Format("15:04 02/01"), cfg.End.Format("15:04 02/01"))
+
+	b.sectionKPI(cfg.KPI)
+	b.sectionSuCo(cfg.SuCo)
+	b.heading("3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
+	b.sectionCBM(cfg.CBM)
+	b.pdf.Ln(2)
+	b.sectionGiamSat(cfg.GiamSat)
+	b.sectionCongViec(cfg.CongViec)
+	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
+	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
+	b.sectionImages(cfg.CongViec)
+	b.signatureBlock()
+
+	if err := os.MkdirAll(cfg.OutDir, 0o755); err != nil {
+		return "", err
+	}
+	fileName := fmt.Sprintf("BaoCaoNgayBDSC_%s.pdf", cfg.RunAt.Format("2006-01-02"))
+	outPath := filepath.Join(cfg.OutDir, fileName)
+	if err := b.pdf.OutputFileAndClose(outPath); err != nil {
+		return "", err
+	}
+	return outPath, nil
+}
