@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"time"
 
 	_ "github.com/microsoft/go-mssqldb"
 
@@ -24,6 +26,28 @@ func Connect(cfg config.Config) (*sql.DB, error) {
 	}
 	conn.SetMaxOpenConns(20)
 	return conn, nil
+}
+
+// ConnectWithRetry keeps retrying Connect every `interval` until it
+// succeeds or `timeout` elapses — needed because this app is launched by a
+// Scheduled Task at machine boot, which can fire before the SQL Server
+// service has finished starting and is ready to accept connections. A
+// single failed attempt at boot used to be fatal; this waits it out instead.
+func ConnectWithRetry(cfg config.Config, timeout, interval time.Duration) (*sql.DB, error) {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		conn, err := Connect(cfg)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("het thoi gian cho SQL Server san sang (%s): %w", timeout, lastErr)
+		}
+		log.Printf("SQL Server chua san sang (%v) — thu lai sau %s...", err, interval)
+		time.Sleep(interval)
+	}
 }
 
 // Migrate creates every table this app needs if it does not already exist.
@@ -127,6 +151,17 @@ CREATE TABLE dbo.ReportRuns (
   Status NVARCHAR(50) NOT NULL,
   ErrorMessage NVARCHAR(MAX) NULL,
   GeneratedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+-- Specific Saturdays/Sundays that should still run the daily report+email
+-- despite the normal weekend skip — set by an Admin for a known exception
+-- (e.g. a scheduled weekend workday).
+IF OBJECT_ID('dbo.ScheduleOverrides', 'U') IS NULL
+CREATE TABLE dbo.ScheduleOverrides (
+  Id INT IDENTITY(1,1) PRIMARY KEY,
+  OverrideDate DATE NOT NULL UNIQUE,
+  CreatedBy NVARCHAR(50) NULL,
+  CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 `
 

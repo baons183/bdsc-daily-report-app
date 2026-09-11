@@ -160,7 +160,7 @@ function buildTabs() {
 function switchTab(id) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === id));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
-  const loaders = { suco: loadSuCo, giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, kpi: loadKPI };
+  const loaders = { suco: loadSuCo, giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, kpi: loadKPI, admin: loadScheduleOverrides };
   if (loaders[id]) loaders[id]().catch(e => alert("Lỗi tải dữ liệu: " + e.message));
 }
 
@@ -381,8 +381,8 @@ async function loadThongKe() {
   content.innerHTML = renderReportView(data);
 }
 
-function rvTable(headers, rows) {
-  if (!rows || rows.length === 0) return `<div class="rv-nodata">(Không có dữ liệu)</div>`;
+function rvTable(headers, rows, emptyMsg) {
+  if (!rows || rows.length === 0) return `<div class="rv-nodata">${emptyMsg || "(Không có dữ liệu)"}</div>`;
   return `<table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>` +
     rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("") +
     `</table>`;
@@ -439,7 +439,7 @@ function renderReportView(d) {
       </table>
 
       <div class="rv-heading">2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
-      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
 
       <div class="rv-heading">3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
       <div class="rv-sub">3.1. Giám sát trực tuyến (online monitoring)</div>
@@ -451,7 +451,7 @@ function renderReportView(d) {
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
 
       <div class="rv-heading">5. VẤN ĐỀ CẦN ĐỀ XUẤT</div>
-      ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows)}
+      ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
 
       <div class="rv-heading">6. LƯU Ý QUAN TRỌNG</div>
       ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows)}
@@ -508,6 +508,29 @@ document.getElementById("form-user").addEventListener("submit", async e => {
   e.target.reset();
   alert("Đã tạo tài khoản.");
 });
+
+// ---- Ngày ngoại lệ chạy báo cáo vào Thứ 7/CN ----
+async function loadScheduleOverrides() {
+  const rows = (await api("/api/schedule-overrides")) || [];
+  const t = document.getElementById("table-overrides");
+  t.innerHTML = "<tr><th>Ngày</th><th>Người thêm</th><th></th></tr>" +
+    rows.map(r => `<tr>
+      <td>${esc(r.overrideDate)}</td><td>${esc(r.createdBy)}</td>
+      <td><button class="btn danger" onclick="deleteScheduleOverride(${r.id})">Xóa</button></td>
+    </tr>`).join("");
+}
+async function addScheduleOverride() {
+  const date = document.getElementById("overrideDate").value;
+  if (!date) { alert("Chọn ngày trước đã."); return; }
+  await api("/api/schedule-overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
+  document.getElementById("overrideDate").value = "";
+  loadScheduleOverrides();
+}
+async function deleteScheduleOverride(id) {
+  if (!confirm("Xóa ngoại lệ này?")) return;
+  await api(`/api/schedule-overrides/${id}`, { method: "DELETE" });
+  loadScheduleOverrides();
+}
 function reportTestDateQuery() {
   const date = document.getElementById("thongke-date").value;
   return date ? "?date=" + encodeURIComponent(date) : "";

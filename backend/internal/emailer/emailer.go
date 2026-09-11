@@ -47,7 +47,7 @@ func SendReportPDF(flowURL, pdfPath string, reportDate time.Time) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 180 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("khong goi duoc Power Automate Flow: %w", err)

@@ -3,6 +3,7 @@
 
 # Build output
 *.exe
+*.exe~
 
 # Runtime data — user uploads, generated reports, logs (not source)
 /uploads/

@@ -143,7 +143,9 @@
     </section>
 
     <section id="panel-cbm" class="panel">
-      <p>Dữ liệu tự động từ hệ thống giám sát trực tuyến (file Excel đồng bộ hàng ngày) — chỉ xem, không nhập/sửa được ở đây. Hiển thị đúng khung giờ sẽ đưa vào báo cáo hôm nay.</p>
+      <p>Dữ liệu tự động từ hệ thống giám sát trực tuyến (file Excel đồng bộ hàng ngày) — chỉ xem, không nhập/sửa được ở đây. Hiển thị đúng khung giờ sẽ đưa vào báo cáo hôm nay.
+        <button class="btn" style="margin-left:10px" onclick="loadCBM()">Làm mới</button>
+      </p>
       <table id="table-cbm"></table>
     </section>
 
@@ -189,6 +191,14 @@
         <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin)<input name="roles"></label>
         <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
       </form>
+
+      <h3>Chạy báo cáo vào Thứ 7/CN cụ thể</h3>
+      <p>Mặc định Thứ 7, Chủ nhật không tự động chạy báo cáo. Thêm ngày cụ thể vào đây nếu ngày đó vẫn cần chạy (VD: đi làm bù).</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <input type="date" id="overrideDate">
+        <button class="btn" style="margin-top:0" onclick="addScheduleOverride()">Thêm ngoại lệ</button>
+      </div>
+      <table id="table-overrides"></table>
     </section>
   </main>
 </div>

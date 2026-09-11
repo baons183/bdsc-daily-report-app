@@ -16,6 +16,7 @@ import (
 const (
 	marginLeft  = 10.0
 	marginRight = 10.0
+	pageTop     = 10.0
 	pageWidth   = 210.0 // A4
 	pageBottom  = 280.0
 	usableWidth = pageWidth - marginLeft - marginRight
@@ -33,8 +34,18 @@ func newBuilder() *builder {
 		UnitStr:        "mm",
 		SizeStr:        "A4",
 	})
-	pdf.SetMargins(marginLeft, 10, marginRight)
+	pdf.SetMargins(marginLeft, pageTop, marginRight)
 	pdf.SetAutoPageBreak(true, 15)
+
+	pdf.AliasNbPages("")
+	pdf.SetFooterFunc(func() {
+		pdf.SetY(-12)
+		pdf.SetFont("Times", "I", 9)
+		pdf.SetX(marginLeft)
+		pdf.CellFormat(usableWidth, 6, fmt.Sprintf("Trang %d/{nb}", pdf.PageNo()), "", 0, "C", false, 0, "")
+	})
+	b := &builder{pdf: pdf}
+	pdf.SetHeaderFunc(b.drawHeaderBox)
 
 	timesPath := `C:\Windows\Fonts\times.ttf`
 	timesBoldPath := `C:\Windows\Fonts\timesbd.ttf`
@@ -50,7 +61,7 @@ func newBuilder() *builder {
 	}
 	pdf.AddPage()
 	pdf.SetFont("Times", "", 11)
-	return &builder{pdf: pdf}
+	return b
 }
 
 const (
@@ -59,15 +70,14 @@ const (
 	logoHeight  = 20.0
 )
 
-// letterhead reproduces the exact bordered letterhead of the original Word
-// report: a 2-row/2-col box (logo | company+department name / report
-// heading) followed by a 3-row memo box (Kính gửi / Copy / Nội dung+Ngày).
-func (b *builder) letterhead(runAt, start, end string) {
+// drawHeaderBox draws the logo + company/title box (2 rows x 2 cols) that
+// repeats at the top of every page — registered via pdf.SetHeaderFunc so
+// fpdf calls it automatically on each AddPage, not just the first.
+func (b *builder) drawHeaderBox() {
 	pdf := b.pdf
 	x0, y0 := marginLeft, pdf.GetY()
 	pdf.SetLineWidth(0.3)
 
-	// ---- Box 1: logo + titles ----
 	logoW := 38.0
 	textW := usableWidth - logoW
 	row1H, row2H := 17.0, 9.0
@@ -98,10 +108,20 @@ func (b *builder) letterhead(runAt, start, end string) {
 	pdf.CellFormat(textW, 6, "BAN BẢO DƯỠNG SỬA CHỮA", "", 2, "C", false, 0, "")
 
 	pdf.SetXY(x0+logoW, y0+row1H+1.5)
-	pdf.CellFormat(textW, 6, "BÁO CÁO BẢO DƯỠNG SỬA CHỮA", "", 0, "C", false, 0, "")
+	pdf.CellFormat(textW, 6, "BÁO CÁO NGÀY CÔNG TÁC BẢO DƯỠNG SỬA CHỮA", "", 0, "C", false, 0, "")
+
+	pdf.SetXY(x0, y0+tbl1H)
+}
+
+// letterhead reproduces the 3-row memo box (Kính gửi / Copy / Nội dung+Ngày)
+// that follows the header box at the top of page 1 only.
+func (b *builder) letterhead(runAt, start, end string) {
+	pdf := b.pdf
+	x0 := marginLeft
+	pdf.SetLineWidth(0.3)
 
 	// ---- Box 2: memo (Kính gửi / Copy / Nội dung+Ngày) ----
-	y := y0 + tbl1H
+	y := pdf.GetY()
 	labelW := 28.0
 	contentW := usableWidth - labelW
 	r1H, r2H, r3H := 7.0, 12.0, 8.0
@@ -183,11 +203,15 @@ func (b *builder) paragraph(text string) {
 
 // table renders a bordered table with word-wrapped cells and manual row
 // height (each row is as tall as its tallest wrapped cell needs).
-func (b *builder) table(headers []string, widths []float64, rows [][]string) {
+func (b *builder) table(headers []string, widths []float64, rows [][]string, emptyMsg ...string) {
 	pdf := b.pdf
 	if len(rows) == 0 {
+		msg := "Các thiết bị hoạt động ổn định."
+		if len(emptyMsg) > 0 {
+			msg = emptyMsg[0]
+		}
 		pdf.SetFont("Times", "I", 10)
-		pdf.CellFormat(usableWidth, 6, "Các thiết bị hoạt động ổn định.", "1", 1, "C", false, 0, "")
+		pdf.CellFormat(usableWidth, 6, msg, "1", 1, "C", false, 0, "")
 		pdf.SetFont("Times", "", 11)
 		return
 	}
@@ -255,11 +279,15 @@ type groupedHeader struct {
 // grouped ones). Data rows reuse the exact same word-wrap/page-break logic
 // as `table`; `widths` is still one entry per *final* flat column (a grouped
 // header's Sub length must match how many width entries it covers).
-func (b *builder) tableGrouped(groups []groupedHeader, widths []float64, rows [][]string) {
+func (b *builder) tableGrouped(groups []groupedHeader, widths []float64, rows [][]string, emptyMsg ...string) {
 	pdf := b.pdf
 	if len(rows) == 0 {
+		msg := "Các thiết bị hoạt động ổn định."
+		if len(emptyMsg) > 0 {
+			msg = emptyMsg[0]
+		}
 		pdf.SetFont("Times", "I", 10)
-		pdf.CellFormat(usableWidth, 6, "Các thiết bị hoạt động ổn định.", "1", 1, "C", false, 0, "")
+		pdf.CellFormat(usableWidth, 6, msg, "1", 1, "C", false, 0, "")
 		pdf.SetFont("Times", "", 11)
 		return
 	}
@@ -506,7 +534,7 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 			fmtFloat(s.ThoiGianDungPX), fmtFloat(s.ThoiGianDungTB), s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan),
 		})
 	}
-	b.tableGrouped(groups, widths, data)
+	b.tableGrouped(groups, widths, data, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")
 }
 
 func (b *builder) sectionCBM(rows []models.CBMRow) {
@@ -550,7 +578,7 @@ func (b *builder) sectionDeXuat(suco []models.SuCo, giamsat []models.GiamSat, co
 	for _, it := range CombineDeXuat(suco, giamsat, congviec) {
 		data = append(data, []string{strconv.Itoa(it.TT), it.ThietBi, it.Note})
 	}
-	b.table(headers, widths, data)
+	b.table(headers, widths, data, "Không có đề xuất.")
 }
 
 func (b *builder) sectionLuuY(suco []models.SuCo, giamsat []models.GiamSat, congviec []models.CongViec) {
@@ -581,6 +609,12 @@ func (b *builder) sectionImages(rows []models.CongViec) {
 			}
 			photos = append(photos, photo{path: full, thietBi: c.ThietBi})
 		}
+	}
+	// Nếu mục 6 đã đi quá nửa trang, sang trang mới cho mục 7 đỡ bị vỡ
+	// header (không đủ chỗ cho ảnh đầu tiên); còn dưới nửa trang thì nối
+	// tiếp luôn, đỡ lãng phí giấy.
+	if b.pdf.GetY() > pageTop+(pageBottom-pageTop)/2 {
+		b.pdf.AddPage()
 	}
 	b.heading("7. MỘT SỐ HÌNH ẢNH THỰC HIỆN CÔNG VIỆC TẠI HIỆN TRƯỜNG")
 	pdf := b.pdf
@@ -620,7 +654,15 @@ func (b *builder) sectionImages(rows []models.CongViec) {
 		pdf.CellFormat(colImg, 7, "Hình ảnh", "1", 1, "C", true, 0, "")
 		pdf.SetFont("Times", "", 9)
 	}
-	if pdf.GetY()+7+rowH > pageBottom {
+	// Dùng chiều cao của cả nhóm ảnh đầu tiên (không phải chỉ 1 hàng) để
+	// quyết định có cần sang trang trước khi vẽ header hay không — tránh vẽ
+	// header xong rồi mới phát hiện cả nhóm không đủ chỗ, để lại header mồ
+	// côi + khoảng trắng như cũ.
+	firstGroupH := rowH
+	if len(groups) > 0 {
+		firstGroupH = float64(len(groups[0].photos)) * rowH
+	}
+	if pdf.GetY()+7+firstGroupH > pageBottom {
 		pdf.AddPage()
 	}
 	drawHeader()
@@ -701,7 +743,7 @@ func Generate(cfg BuildInput) (string, error) {
 	if err := os.MkdirAll(cfg.OutDir, 0o755); err != nil {
 		return "", err
 	}
-	fileName := fmt.Sprintf("BaoCaoNgayBDSC_%s.pdf", cfg.RunAt.Format("2006-01-02"))
+	fileName := fmt.Sprintf("BaoCaoNgayBDSC_%s.pdf", reportDate.Format("2006-01-02"))
 	outPath := filepath.Join(cfg.OutDir, fileName)
 	if err := b.pdf.OutputFileAndClose(outPath); err != nil {
 		return "", err

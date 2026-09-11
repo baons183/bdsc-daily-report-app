@@ -18,7 +18,9 @@ import (
 func main() {
 	cfg := config.Load()
 
-	conn, err := db.Connect(cfg)
+	// Chờ tối đa 5 phút, thử lại mỗi 5 giây — cần thiết vì app tự chạy bằng
+	// Scheduled Task lúc khởi động máy, SQL Server có thể chưa kịp sẵn sàng.
+	conn, err := db.ConnectWithRetry(cfg, 5*time.Minute, 5*time.Second)
 	if err != nil {
 		log.Fatalf("loi ket noi database: %v", err)
 	}
@@ -62,6 +64,10 @@ func main() {
 
 	mux.Handle("POST /api/users", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.CreateUser))))
 
+	mux.Handle("GET /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.ListScheduleOverrides))))
+	mux.Handle("POST /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.AddScheduleOverride))))
+	mux.Handle("DELETE /api/schedule-overrides/{id}", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.DeleteScheduleOverride))))
+
 	mux.Handle("POST /api/report/run-now", authMw(http.HandlerFunc(auth.RequireRole("Admin", func(w http.ResponseWriter, r *http.Request) {
 		runAt, err := parseRunAt(r)
 		if err != nil {
@@ -91,7 +97,9 @@ func main() {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt); err != nil {
+		// Cung ngay hien thi tren PDF/ten file (hom qua, vi cua so du lieu la
+		// 8:01 hom qua -> 7:59 hom nay), khong phai ngay sinh bao cao.
+		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt.AddDate(0, 0, -1)); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -108,11 +116,29 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, withCORS(mux)))
 }
 
-// scheduleDailyReport sleeps until the next 08:00 local time on a weekday
-// (Mon-Fri, skipping Saturday/Sunday), generates the report, emails it via
-// the configured Power Automate Flow, then repeats forever. Runs in its own
-// goroutine for the lifetime of the process; a failed run is logged (via
-// report.RunDaily's own dbo.ReportRuns row) but never crashes the loop.
+// isRunDay reports whether the daily report should run on date d: true for
+// any Mon-Fri, and also true for a Saturday/Sunday that an Admin has
+// explicitly added to dbo.ScheduleOverrides as a known exception (e.g. a
+// scheduled weekend workday).
+func isRunDay(conn *sql.DB, d time.Time) bool {
+	if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
+		return true
+	}
+	var count int
+	err := conn.QueryRow(`SELECT COUNT(*) FROM dbo.ScheduleOverrides WHERE OverrideDate = ?`, d.Format("2006-01-02")).Scan(&count)
+	if err != nil {
+		log.Printf("loi kiem tra ScheduleOverrides cho %s: %v", d.Format("2006-01-02"), err)
+		return false
+	}
+	return count > 0
+}
+
+// scheduleDailyReport sleeps until the next 08:00 local time on a day that
+// isRunDay allows (weekdays, plus any admin-configured weekend exception),
+// generates the report, emails it via the configured Power Automate Flow,
+// then repeats forever. Runs in its own goroutine for the lifetime of the
+// process; a failed run is logged (via report.RunDaily's own
+// dbo.ReportRuns row) but never crashes the loop.
 func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 	for {
 		now := time.Now()
@@ -120,7 +146,7 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 		if !next.After(now) {
 			next = next.AddDate(0, 0, 1)
 		}
-		for next.Weekday() == time.Saturday || next.Weekday() == time.Sunday {
+		for !isRunDay(conn, next) {
 			next = next.AddDate(0, 0, 1)
 		}
 		sleepDur := next.Sub(now)
@@ -135,7 +161,9 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 		}
 		log.Printf("da sinh bao cao ngay: %s", path)
 
-		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt); err != nil {
+		// Cung ngay hien thi tren PDF/ten file (hom qua, vi cua so du lieu la
+		// 8:01 hom qua -> 7:59 hom nay), khong phai ngay sinh bao cao.
+		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt.AddDate(0, 0, -1)); err != nil {
 			log.Printf("loi gui email bao cao: %v", err)
 		} else if cfg.EmailFlowURL != "" {
 			log.Printf("da gui email bao cao ngay")
