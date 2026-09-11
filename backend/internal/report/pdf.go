@@ -240,6 +240,106 @@ func (b *builder) table(headers []string, widths []float64, rows [][]string) {
 	pdf.Ln(2)
 }
 
+// groupedHeader is one top-row header cell for tableGrouped. A column with
+// no Sub spans both header rows (a plain rowspan-2 header). A column with
+// 2+ Sub entries spans len(Sub) consecutive width columns in the top row
+// (colspan) and shows one sub-label per column in the second row — e.g.
+// "Thời gian dừng (h)" over "PX (h)" / "TB (h)".
+type groupedHeader struct {
+	Label string
+	Sub   []string
+}
+
+// tableGrouped is `table` with a 2-row header supporting merged/grouped
+// column headers (rowspan for ungrouped columns, colspan+sub-labels for
+// grouped ones). Data rows reuse the exact same word-wrap/page-break logic
+// as `table`; `widths` is still one entry per *final* flat column (a grouped
+// header's Sub length must match how many width entries it covers).
+func (b *builder) tableGrouped(groups []groupedHeader, widths []float64, rows [][]string) {
+	pdf := b.pdf
+	if len(rows) == 0 {
+		pdf.SetFont("Times", "I", 10)
+		pdf.CellFormat(usableWidth, 6, "Các thiết bị hoạt động ổn định.", "1", 1, "C", false, 0, "")
+		pdf.SetFont("Times", "", 11)
+		return
+	}
+	const headerH = 7.0
+	drawHeader := func() {
+		pdf.SetFont("Times", "B", 9)
+		pdf.SetFillColor(224, 224, 224)
+		x0, y0 := pdf.GetX(), pdf.GetY()
+		x, wi := x0, 0
+		for _, g := range groups {
+			if len(g.Sub) < 2 {
+				w := widths[wi]
+				pdf.Rect(x, y0, w, headerH*2, "DF")
+				pdf.SetXY(x, y0+headerH-2.5)
+				pdf.CellFormat(w, 5, g.Label, "", 0, "C", false, 0, "")
+				x += w
+				wi++
+				continue
+			}
+			span := len(g.Sub)
+			gw := 0.0
+			for k := 0; k < span; k++ {
+				gw += widths[wi+k]
+			}
+			pdf.Rect(x, y0, gw, headerH, "DF")
+			pdf.SetXY(x, y0+1)
+			pdf.CellFormat(gw, 5, g.Label, "", 0, "C", false, 0, "")
+			sx := x
+			for k := 0; k < span; k++ {
+				pdf.Rect(sx, y0+headerH, widths[wi+k], headerH, "DF")
+				pdf.SetXY(sx, y0+headerH+1)
+				pdf.CellFormat(widths[wi+k], 5, g.Sub[k], "", 0, "C", false, 0, "")
+				sx += widths[wi+k]
+			}
+			x += gw
+			wi += span
+		}
+		pdf.SetXY(x0, y0+headerH*2)
+		pdf.SetFont("Times", "", 9)
+	}
+	if pdf.GetY()+20+headerH > pageBottom {
+		pdf.AddPage()
+	}
+	drawHeader()
+
+	for _, row := range rows {
+		maxLines := 1
+		cellLines := make([][]string, len(row))
+		for i, cell := range row {
+			raw := pdf.SplitLines([]byte(cell), widths[i]-2)
+			var lines []string
+			for _, l := range raw {
+				lines = append(lines, string(l))
+			}
+			if len(lines) == 0 {
+				lines = []string{""}
+			}
+			cellLines[i] = lines
+			if len(lines) > maxLines {
+				maxLines = len(lines)
+			}
+		}
+		rowH := float64(maxLines)*4.2 + 1.5
+
+		if pdf.GetY()+rowH > pageBottom {
+			pdf.AddPage()
+			drawHeader()
+		}
+		x, y := pdf.GetX(), pdf.GetY()
+		for i := range row {
+			pdf.Rect(x, y, widths[i], rowH, "D")
+			pdf.SetXY(x+1, y+0.75)
+			pdf.MultiCell(widths[i]-2, 4.2, strings.Join(cellLines[i], "\n"), "", "L", false)
+			x += widths[i]
+		}
+		pdf.SetXY(marginLeft, y+rowH)
+	}
+	pdf.Ln(2)
+}
+
 func fmtFloat(f *float64) string {
 	if f == nil {
 		return ""
@@ -270,42 +370,135 @@ func fmtDate(d models.NullDate) string {
 // the web KPI tab's KPI_CATEGORIES exactly — the PDF renders all 5 every
 // day regardless of what was actually saved, defaulting a missing figure to
 // 0 and a missing Đánh giá to "Đạt" rather than leaving a blank/missing row.
-var kpiCategories = []struct{ ChiTieu, Nhom, DVT string }{
-	{"Sự cố", "Sự cố", "Vụ"},
-	{"Near Miss", "Sự cố", "Vụ"},
-	{"Technical event", "Sự cố", "Vụ"},
-	{"Rework", "Chất lượng", "WO"},
-	{"Dừng ngoài kế hoạch", "Hỏng thiết bị", "Vụ"},
+// GroupSize is set only on the first row of a Nhóm group (how many rows
+// that group's TT/Nhóm cells should span); the rows after it are 0.
+var kpiCategories = []struct {
+	TT        int
+	ChiTieu   string
+	Nhom      string
+	DVT       string
+	GroupSize int
+}{
+	{1, "Sự cố", "Sự cố", "Vụ", 3},
+	{1, "Near Miss", "Sự cố", "Vụ", 0},
+	{1, "Technical event", "Sự cố", "Vụ", 0},
+	{2, "Rework", "Chất lượng", "WO", 1},
+	{3, "Dừng ngoài kế hoạch", "Hỏng thiết bị", "Vụ", 1},
 }
 
+// sectionKPI reproduces the exact merged-cell layout of the Word KPI table:
+// TT/Nhóm merged vertically per group, and a "Hôm nay" header spanning the
+// KH/TH sub-columns — drawn by hand since neither `table` nor `tableGrouped`
+// merge cells across multiple *data* rows.
 func (b *builder) sectionKPI(rows []models.KPIEntry) {
 	b.heading("1. CÁC CHỈ SỐ KPI")
-	headers := []string{"Chỉ tiêu", "Nhóm", "ĐVT", "Kế hoạch", "Thực hiện", "Lũy kế tháng", "Đánh giá"}
-	widths := []float64{50, 25, 15, 22, 22, 26, 30}
+	pdf := b.pdf
 	byChiTieu := map[string]models.KPIEntry{}
 	for _, k := range rows {
 		byChiTieu[k.ChiTieu] = k
 	}
-	var data [][]string
-	for _, cat := range kpiCategories {
-		k, ok := byChiTieu[cat.ChiTieu]
-		dvt := cat.DVT
-		if ok && k.DVT != "" {
-			dvt = k.DVT
+
+	// TT, Nhóm, Chỉ tiêu, ĐVT, KH, TH, Lũy kế tháng, Đánh giá — sums to usableWidth.
+	widths := []float64{10, 25, 38, 14, 20, 20, 28, 35}
+	const headerH = 7.0
+	const rowH = 6.5
+
+	drawHeader := func() {
+		pdf.SetFont("Times", "B", 9)
+		pdf.SetFillColor(224, 224, 224)
+		x0, y0 := pdf.GetX(), pdf.GetY()
+		x := x0
+		for i, lbl := range []string{"TT", "Nhóm", "Chỉ tiêu", "ĐVT"} {
+			pdf.Rect(x, y0, widths[i], headerH*2, "DF")
+			pdf.SetXY(x, y0+headerH-2.5)
+			pdf.CellFormat(widths[i], 5, lbl, "", 0, "C", false, 0, "")
+			x += widths[i]
 		}
-		danhGia := "Đạt"
-		if ok && strings.TrimSpace(k.DanhGia) != "" {
-			danhGia = k.DanhGia
+		gw := widths[4] + widths[5]
+		pdf.Rect(x, y0, gw, headerH, "DF")
+		pdf.SetXY(x, y0+1)
+		pdf.CellFormat(gw, 5, "Hôm nay", "", 0, "C", false, 0, "")
+		pdf.Rect(x, y0+headerH, widths[4], headerH, "DF")
+		pdf.SetXY(x, y0+headerH+1)
+		pdf.CellFormat(widths[4], 5, "KH", "", 0, "C", false, 0, "")
+		pdf.Rect(x+widths[4], y0+headerH, widths[5], headerH, "DF")
+		pdf.SetXY(x+widths[4], y0+headerH+1)
+		pdf.CellFormat(widths[5], 5, "TH", "", 0, "C", false, 0, "")
+		x += gw
+		for i, lbl := range []string{"Lũy kế tháng", "Đánh giá"} {
+			w := widths[6+i]
+			pdf.Rect(x, y0, w, headerH*2, "DF")
+			pdf.SetXY(x, y0+headerH-2.5)
+			pdf.CellFormat(w, 5, lbl, "", 0, "C", false, 0, "")
+			x += w
 		}
-		data = append(data, []string{cat.ChiTieu, cat.Nhom, dvt, fmtFloatOrZero(k.KeHoach), fmtFloatOrZero(k.ThucHien), fmtFloatOrZero(k.LuyKeThang), danhGia})
+		pdf.SetXY(x0, y0+headerH*2)
+		pdf.SetFont("Times", "", 9)
 	}
-	b.table(headers, widths, data)
+
+	if pdf.GetY()+20+headerH > pageBottom {
+		pdf.AddPage()
+	}
+	drawHeader()
+
+	i := 0
+	for i < len(kpiCategories) {
+		cat := kpiCategories[i]
+		groupSize := cat.GroupSize
+		if groupSize == 0 {
+			groupSize = 1
+		}
+		groupH := float64(groupSize) * rowH
+		if pdf.GetY()+groupH > pageBottom {
+			pdf.AddPage()
+			drawHeader()
+		}
+		x, y := pdf.GetX(), pdf.GetY()
+
+		pdf.Rect(x, y, widths[0], groupH, "D")
+		pdf.SetXY(x, y+groupH/2-2.5)
+		pdf.CellFormat(widths[0], 5, strconv.Itoa(cat.TT), "", 0, "C", false, 0, "")
+		pdf.Rect(x+widths[0], y, widths[1], groupH, "D")
+		pdf.SetXY(x+widths[0], y+groupH/2-2.5)
+		pdf.CellFormat(widths[1], 5, cat.Nhom, "", 0, "C", false, 0, "")
+
+		for gi := 0; gi < groupSize; gi++ {
+			c := kpiCategories[i+gi]
+			k, ok := byChiTieu[c.ChiTieu]
+			dvt := c.DVT
+			if ok && k.DVT != "" {
+				dvt = k.DVT
+			}
+			danhGia := "Đạt"
+			if ok && strings.TrimSpace(k.DanhGia) != "" {
+				danhGia = k.DanhGia
+			}
+			ry := y + float64(gi)*rowH
+			cx := x + widths[0] + widths[1]
+			vals := []string{c.ChiTieu, dvt, fmtFloatOrZero(k.KeHoach), fmtFloatOrZero(k.ThucHien), fmtFloatOrZero(k.LuyKeThang), danhGia}
+			for vi, val := range vals {
+				w := widths[2+vi]
+				pdf.Rect(cx, ry, w, rowH, "D")
+				pdf.SetXY(cx, ry+rowH/2-2.5)
+				pdf.CellFormat(w, 5, val, "", 0, "C", false, 0, "")
+				cx += w
+			}
+		}
+
+		pdf.SetXY(x, y+groupH)
+		i += groupSize
+	}
+	pdf.Ln(2)
 }
 
 func (b *builder) sectionSuCo(rows []models.SuCo) {
 	b.heading("2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
-	headers := []string{"TT", "Thiết bị", "ĐM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"}
-	widths := []float64{8, 38, 16, 34, 14, 14, 32, 20, 14}
+	groups := []groupedHeader{
+		{Label: "TT"}, {Label: "Thiết bị"}, {Label: "DM"}, {Label: "Tình trạng"},
+		{Label: "Thời gian dừng (h)", Sub: []string{"PX (h)", "TB (h)"}},
+		{Label: "Phương án"}, {Label: "Đơn vị"}, {Label: "Thời hạn"},
+	}
+	widths := []float64{8, 26, 16, 40, 14, 14, 38, 20, 14}
 	var data [][]string
 	for _, s := range rows {
 		data = append(data, []string{
@@ -313,7 +506,7 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 			fmtFloat(s.ThoiGianDungPX), fmtFloat(s.ThoiGianDungTB), s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan),
 		})
 	}
-	b.table(headers, widths, data)
+	b.tableGrouped(groups, widths, data)
 }
 
 func (b *builder) sectionCBM(rows []models.CBMRow) {
@@ -329,8 +522,8 @@ func (b *builder) sectionCBM(rows []models.CBMRow) {
 
 func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 	b.subheading("3.2. Chẩn đoán bằng tool chuyên dụng")
-	headers := []string{"TT", "Thiết bị", "ĐM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
-	widths := []float64{8, 34, 12, 36, 30, 36, 20, 14}
+	headers := []string{"TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
+	widths := []float64{8, 24, 12, 40, 30, 42, 20, 14}
 	var data [][]string
 	for _, s := range rows {
 		data = append(data, []string{strconv.Itoa(s.TT), s.ThietBi, s.DM, s.TinhTrang, s.RuiRo, s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan)})
@@ -340,8 +533,8 @@ func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 
 func (b *builder) sectionCongViec(rows []models.CongViec) {
 	b.heading("4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG")
-	headers := []string{"TT", "Thiết bị", "ĐM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"}
-	widths := []float64{8, 25, 12, 40, 25, 18, 40, 22}
+	headers := []string{"TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"}
+	widths := []float64{8, 18, 12, 44, 25, 18, 43, 22}
 	var data [][]string
 	for _, c := range rows {
 		data = append(data, []string{strconv.Itoa(c.TT), c.ThietBi, c.DM, c.NoiDung, c.KeHoach, fmtFloat(c.TienDo), c.HomNay, c.NgayMai})
