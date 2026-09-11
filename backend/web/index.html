@@ -7,7 +7,14 @@
   body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f5f7; color: #222; }
   header { background: #0b4f8a; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
   header h1 { font-size: 18px; margin: 0; }
-  #logoutBtn { background: #fff; color: #0b4f8a; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+  #logoutBtn, #changePwBtn { background: #fff; color: #0b4f8a; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-left: 8px; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal-overlay[hidden] { display: none; }
+  .modal-box { background: #fff; padding: 24px; border-radius: 8px; width: 320px; }
+  .modal-box h3 { margin-top: 0; }
+  .modal-box input { width: 100%; box-sizing: border-box; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 4px; }
+  .modal-box .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .modal-err { color: #c0392b; font-size: 13px; min-height: 16px; }
   nav { display: flex; gap: 4px; background: #fff; padding: 0 20px; border-bottom: 1px solid #ddd; }
   nav button { border: none; background: none; padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
   nav button.active { border-bottom-color: #0b4f8a; font-weight: 600; color: #0b4f8a; }
@@ -64,8 +71,25 @@
 <div id="app">
   <header>
     <h1>Báo cáo ngày BDSC — <span id="whoami"></span></h1>
-    <button id="logoutBtn" onclick="logout()">Đăng xuất</button>
+    <div>
+      <button id="changePwBtn" onclick="openChangePassword()">Đổi mật khẩu</button>
+      <button id="logoutBtn" onclick="logout()">Đăng xuất</button>
+    </div>
   </header>
+
+  <div id="changePwModal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h3>Đổi mật khẩu</h3>
+      <input id="cpOld" type="password" placeholder="Mật khẩu hiện tại">
+      <input id="cpNew" type="password" placeholder="Mật khẩu mới (ít nhất 6 ký tự)">
+      <input id="cpNew2" type="password" placeholder="Nhập lại mật khẩu mới">
+      <div class="modal-err" id="cpErr"></div>
+      <div class="modal-actions">
+        <button class="btn" style="margin-top:0; background:#888" onclick="closeChangePassword()">Hủy</button>
+        <button class="btn" style="margin-top:0" onclick="submitChangePassword()">Lưu</button>
+      </div>
+    </div>
+  </div>
   <nav id="tabs"></nav>
   <main>
     <section id="panel-suco" class="panel">

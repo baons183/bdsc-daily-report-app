@@ -78,6 +78,52 @@ func (e *Env) BootstrapFirstAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, map[string]bool{"ok": true})
 }
 
+type changePasswordReq struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
+// ChangePassword lets the currently logged-in user (identified from their
+// own JWT, not a path/body-supplied employee code) set a new password,
+// after confirming they still know the current one.
+func (e *Env) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := currentUser(r)
+	if claims == nil {
+		writeErr(w, 401, "chua dang nhap")
+		return
+	}
+	var in changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le")
+		return
+	}
+	if len(in.NewPassword) < 6 {
+		writeErr(w, 400, "mat khau moi phai co it nhat 6 ky tu")
+		return
+	}
+	var hash string
+	if err := e.DB.QueryRowContext(r.Context(),
+		`SELECT PasswordHash FROM dbo.Users WHERE EmployeeCode = ?`, claims.EmployeeCode).Scan(&hash); err != nil {
+		writeErr(w, 404, "khong tim thay tai khoan")
+		return
+	}
+	if !auth.CheckPassword(hash, in.OldPassword) {
+		writeErr(w, 401, "mat khau hien tai khong dung")
+		return
+	}
+	newHash, err := auth.HashPassword(in.NewPassword)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(),
+		`UPDATE dbo.Users SET PasswordHash = ? WHERE EmployeeCode = ?`, newHash, claims.EmployeeCode); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
 type createUserReq struct {
 	EmployeeCode string `json:"employeeCode"`
 	Password     string `json:"password"`

@@ -86,6 +86,44 @@ function logout() {
   location.reload();
 }
 
+function openChangePassword() {
+  document.getElementById("cpOld").value = "";
+  document.getElementById("cpNew").value = "";
+  document.getElementById("cpNew2").value = "";
+  document.getElementById("cpErr").textContent = "";
+  document.getElementById("changePwModal").hidden = false;
+}
+function closeChangePassword() {
+  document.getElementById("changePwModal").hidden = true;
+}
+async function submitChangePassword() {
+  const oldPassword = document.getElementById("cpOld").value;
+  const newPassword = document.getElementById("cpNew").value;
+  const newPassword2 = document.getElementById("cpNew2").value;
+  const errBox = document.getElementById("cpErr");
+  errBox.textContent = "";
+  if (!oldPassword || !newPassword) {
+    errBox.textContent = "Vui lòng nhập đủ thông tin.";
+    return;
+  }
+  if (newPassword !== newPassword2) {
+    errBox.textContent = "Mật khẩu mới nhập lại không khớp.";
+    return;
+  }
+  try {
+    await api("/api/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+    closeChangePassword();
+    alert("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
+    logout();
+  } catch (e) {
+    errBox.textContent = "Lỗi: " + e.message;
+  }
+}
+
 function showApp() {
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("app").style.display = "block";
@@ -178,7 +216,7 @@ async function loadSuCo() {
   const rows = (await api("/api/suco")) || [];
   ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-suco");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>ĐM</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
       <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
@@ -219,7 +257,7 @@ async function loadGiamSat() {
   const rows = (await api("/api/giamsat")) || [];
   ROWS_CACHE.giamsat = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-giamsat");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>ĐM</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
       <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
@@ -257,7 +295,7 @@ async function loadCongViec() {
   const rows = (await api("/api/congviec")) || [];
   ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-congviec");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>ĐM</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
       <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Ảnh</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? ""}</td>
@@ -401,16 +439,16 @@ function renderReportView(d) {
       </table>
 
       <div class="rv-heading">2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
-      ${rvTable(["TT", "Thiết bị", "ĐM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows)}
 
       <div class="rv-heading">3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
       <div class="rv-sub">3.1. Giám sát trực tuyến (online monitoring)</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
       <div class="rv-sub">3.2. Chẩn đoán bằng tool chuyên dụng</div>
-      ${rvTable(["TT", "Thiết bị", "ĐM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG</div>
-      ${rvTable(["TT", "Thiết bị", "ĐM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
 
       <div class="rv-heading">5. VẤN ĐỀ CẦN ĐỀ XUẤT</div>
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows)}

@@ -38,6 +38,7 @@ func main() {
 	// authenticated
 	authMw := auth.Middleware(cfg.JWTSecret)
 	mux.Handle("GET /api/assets/search", authMw(http.HandlerFunc(env.SearchAssets)))
+	mux.Handle("POST /api/change-password", authMw(http.HandlerFunc(env.ChangePassword)))
 	mux.Handle("GET /api/cbm", authMw(http.HandlerFunc(env.ListCBM)))
 	mux.Handle("GET /api/report/view", authMw(http.HandlerFunc(env.GetReportView)))
 
