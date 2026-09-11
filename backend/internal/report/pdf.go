@@ -680,7 +680,11 @@ func Generate(cfg BuildInput) (string, error) {
 	b := newBuilder()
 	b.uploadsDir = cfg.UploadsDir
 
-	b.letterhead(cfg.RunAt.Format("02/01/2006"), cfg.Start.Format("15:04 02/01"), cfg.End.Format("15:04 02/01"))
+	// The window [start, end] spans yesterday 08:01 -> today 07:59, so the
+	// data is really "yesterday's" activity even though the report is
+	// generated/sent this morning — the printed date reflects that.
+	reportDate := cfg.RunAt.AddDate(0, 0, -1)
+	b.letterhead(reportDate.Format("02/01/2006"), cfg.Start.Format("15:04 02/01"), cfg.End.Format("15:04 02/01"))
 
 	b.sectionKPI(cfg.KPI)
 	b.sectionSuCo(cfg.SuCo)

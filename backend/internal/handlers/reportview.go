@@ -60,8 +60,11 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The window spans yesterday 08:01 -> today 07:59, so the data is really
+	// "yesterday's" activity even though it's viewed/generated this morning —
+	// the displayed date reflects that, same as the PDF.
 	writeJSON(w, 200, reportViewResponse{
-		RunAt:    data.RunAt.Format("02/01/2006"),
+		RunAt:    data.RunAt.AddDate(0, 0, -1).Format("02/01/2006"),
 		Start:    data.Start.Format("15:04 02/01/2006"),
 		End:      data.End.Format("15:04 02/01/2006"),
 		KPI:      data.KPI,
