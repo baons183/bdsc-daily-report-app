@@ -341,7 +341,9 @@ function kpiDanhGiaSelect(value) {
 
 // ---- Giám sát trực tuyến (CBM) — chỉ xem, dữ liệu tự động từ hệ thống ngoài ----
 async function loadCBM() {
-  const rows = (await api("/api/cbm")) || [];
+  const dateInput = document.getElementById("cbm-date");
+  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  const rows = (await api("/api/cbm?date=" + encodeURIComponent(dateInput.value))) || [];
   const t = document.getElementById("table-cbm");
   t.innerHTML = "<tr><th>TT</th><th>Thời gian</th><th>Tagname</th><th>Thiết bị</th><th>Mô tả</th><th>Giá trị cảnh báo</th><th>Mức cảnh báo</th></tr>" +
     (rows.length === 0

@@ -143,9 +143,11 @@
     </section>
 
     <section id="panel-cbm" class="panel">
-      <p>Dữ liệu tự động từ hệ thống giám sát trực tuyến (file Excel đồng bộ hàng ngày) — chỉ xem, không nhập/sửa được ở đây. Hiển thị đúng khung giờ sẽ đưa vào báo cáo hôm nay.
-        <button class="btn" style="margin-left:10px" onclick="loadCBM()">Làm mới</button>
-      </p>
+      <p>Dữ liệu tự động từ hệ thống giám sát trực tuyến (file Excel đồng bộ hàng ngày) — chỉ xem, không nhập/sửa được ở đây. Hiển thị đúng khung giờ sẽ đưa vào báo cáo của ngày đã chọn.</p>
+      <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label>Chọn ngày: <input type="date" id="cbm-date"></label>
+        <button class="btn" onclick="loadCBM()" style="margin-top:0">Xem / Làm mới</button>
+      </div>
       <table id="table-cbm"></table>
     </section>
 

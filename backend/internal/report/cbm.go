@@ -1,6 +1,7 @@
 package report
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ func ReadCBMExcel(path string, start, end time.Time) []models.CBMRow {
 	}
 	f, err := excelize.OpenFile(path)
 	if err != nil {
+		log.Printf("khong doc duoc file CBM excel (%s): %v", path, err)
 		return nil
 	}
 	defer f.Close()

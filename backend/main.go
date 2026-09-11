@@ -13,6 +13,7 @@ import (
 	"bdscdailyreport/internal/emailer"
 	"bdscdailyreport/internal/handlers"
 	"bdscdailyreport/internal/report"
+	"bdscdailyreport/internal/window"
 )
 
 func main() {
@@ -111,6 +112,7 @@ func main() {
 	mux.Handle("/", noCache(http.FileServer(http.Dir("./web"))))
 
 	go scheduleDailyReport(conn, cfg)
+	go scheduleKPICarryForward(conn, cfg)
 
 	log.Printf("dang chay tren cong %s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, withCORS(mux)))
@@ -169,6 +171,53 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 			log.Printf("da gui email bao cao ngay")
 		}
 	}
+}
+
+// scheduleKPICarryForward sleeps until 5 minutes after each day's report
+// time (every calendar day, weekends included — KPI data entry isn't tied
+// to whether that day's PDF gets generated), then calls
+// carryForwardKPIIfEmpty so a day nobody touches the KPI tab for still
+// starts with yesterday's numbers as a default instead of blank/zero.
+// Runs forever in its own goroutine.
+func scheduleKPICarryForward(conn *sql.DB, cfg config.Config) {
+	for {
+		now := time.Now()
+		next := time.Date(now.Year(), now.Month(), now.Day(), cfg.ReportHour, cfg.ReportMinute+5, 0, 0, now.Location())
+		if !next.After(now) {
+			next = next.AddDate(0, 0, 1)
+		}
+		time.Sleep(next.Sub(now))
+
+		if err := carryForwardKPIIfEmpty(conn, time.Now()); err != nil {
+			log.Printf("loi sao chep KPI tu ngay hom truoc: %v", err)
+		}
+	}
+}
+
+// carryForwardKPIIfEmpty duplicates the previous day's KPIEntries rows
+// forward into `now`'s report date, but only if that date has no rows yet
+// — so it only ever fills in a default, never clobbers whatever a user
+// already entered (SaveKPI's own delete+insert is what "nhập thì đè vào"
+// means in practice: a manual save always replaces today's rows, whether
+// they came from this carry-forward or were still blank).
+func carryForwardKPIIfEmpty(conn *sql.DB, now time.Time) error {
+	_, end := window.EntryWindow(now)
+	target := end.Format("2006-01-02")
+	source := end.AddDate(0, 0, -1).Format("2006-01-02")
+
+	res, err := conn.Exec(`
+IF NOT EXISTS (SELECT 1 FROM dbo.KPIEntries WHERE NgayBaoCao = ?)
+INSERT INTO dbo.KPIEntries (ChiTieu, Nhom, DVT, KeHoach, ThucHien, LuyKeThang, DanhGia, NgayBaoCao, CreatedBy)
+SELECT ChiTieu, Nhom, DVT, KeHoach, ThucHien, LuyKeThang, DanhGia, ?, CreatedBy
+FROM dbo.KPIEntries WHERE NgayBaoCao = ?`,
+		target, target, source)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("da tu dong sao chep %d dong KPI tu ngay %s sang ngay %s", n, source, target)
+	}
+	return nil
 }
 
 // parseRunAt reads an optional "?date=YYYY-MM-DD" query param (used by the
