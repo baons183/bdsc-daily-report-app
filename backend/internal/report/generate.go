@@ -3,6 +3,9 @@ package report
 import (
 	"context"
 	"database/sql"
+	"net/url"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"bdscdailyreport/internal/models"
@@ -57,22 +60,29 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 }
 
 // RunDaily gathers today's data window and produces the PDF, logging the
-// outcome to dbo.ReportRuns either way.
-func RunDaily(db *sql.DB, uploadsDir, outDir, cbmExcelPath string, runAt time.Time) (string, error) {
+// outcome to dbo.ReportRuns either way. Also returns the HTML email-body
+// summary (RenderEmailHTML) built from the exact same data, with its PDF
+// link pointing at sharePointURLPrefix + the generated file's name — the
+// SharePoint-synced copy of outDir, so the link resolves once sync catches
+// up (may lag a little behind the file actually landing on disk).
+func RunDaily(db *sql.DB, uploadsDir, outDir, cbmExcelPath, sharePointURLPrefix string, runAt time.Time) (pdfPath, emailHTML string, err error) {
 	data, err := GatherData(db, uploadsDir, cbmExcelPath, runAt)
 	if err != nil {
 		logRun(db, runAt, "", "FAILED", err.Error())
-		return "", err
+		return "", "", err
 	}
 	data.OutDir = outDir
 
 	path, err := Generate(data)
 	if err != nil {
 		logRun(db, runAt, "", "FAILED", err.Error())
-		return "", err
+		return "", "", err
 	}
 	logRun(db, runAt, path, "OK", "")
-	return path, nil
+
+	pdfLinkURL := strings.TrimRight(sharePointURLPrefix, "/") + "/" + url.PathEscape(filepath.Base(path))
+	emailHTML = RenderEmailHTML(data, pdfLinkURL)
+	return path, emailHTML, nil
 }
 
 func logRun(db *sql.DB, runAt time.Time, path, status, errMsg string) {

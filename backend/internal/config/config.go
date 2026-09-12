@@ -22,6 +22,10 @@ type Config struct {
 	// in the Thống kê tab, so testing never touches the real daily flow
 	// that emails Ban Giám đốc every morning.
 	EmailFlowTestURL string
+	// Base SharePoint URL matching ReportsDir (a SharePoint-synced local
+	// folder) — the email body links to <this>/<pdf file name> instead of
+	// relying only on the raw attachment.
+	ReportSharePointURLPrefix string
 	// Name of the (separate, shared) database holding Asset_Master — the same
 	// equipment master table MaintenanceReportApp/checksheet-app already use
 	// for their own Thiết bị lookups. Same SQL Server instance/login as our
@@ -82,7 +86,8 @@ func Load() Config {
 		ReportsDir:       getEnv("REPORTS_DIR", "./generated_reports"),
 		CBMExcelPath:     getEnv("CBM_EXCEL_PATH", ""),
 		EmailFlowURL:     getEnv("EMAIL_FLOW_URL", ""),
-		EmailFlowTestURL: getEnv("EMAIL_FLOW_TEST_URL", ""),
+		EmailFlowTestURL:          getEnv("EMAIL_FLOW_TEST_URL", ""),
+		ReportSharePointURLPrefix: getEnv("REPORT_SHAREPOINT_URL_PREFIX", ""),
 		ReportHour:       8,
 		ReportMinute:     0,
 		AssetDBName:      getEnv("ASSET_DB_NAME", "MNT_Report_Mirror"),

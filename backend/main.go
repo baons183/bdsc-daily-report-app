@@ -78,7 +78,7 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, runAt)
+		path, _, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -96,7 +96,7 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, runAt)
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -106,7 +106,7 @@ func main() {
 		// Ban Giam doc chi vi dang thu nghiem.
 		// Cung ngay hien thi tren PDF/ten file (hom qua, vi cua so du lieu la
 		// 8:01 hom qua -> 7:59 hom nay), khong phai ngay sinh bao cao.
-		if err := emailer.SendReportPDF(cfg.EmailFlowTestURL, path, runAt.AddDate(0, 0, -1)); err != nil {
+		if err := emailer.SendReportPDF(cfg.EmailFlowTestURL, emailHTML, runAt.AddDate(0, 0, -1)); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -162,7 +162,7 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 		time.Sleep(sleepDur)
 
 		runAt := time.Now()
-		path, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, runAt)
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			log.Printf("loi sinh bao cao ngay: %v", err)
 			continue
@@ -171,7 +171,7 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 
 		// Cung ngay hien thi tren PDF/ten file (hom qua, vi cua so du lieu la
 		// 8:01 hom qua -> 7:59 hom nay), khong phai ngay sinh bao cao.
-		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt.AddDate(0, 0, -1)); err != nil {
+		if err := emailer.SendReportPDF(cfg.EmailFlowURL, emailHTML, runAt.AddDate(0, 0, -1)); err != nil {
 			log.Printf("loi gui email bao cao: %v", err)
 		} else if cfg.EmailFlowURL != "" {
 			log.Printf("da gui email bao cao ngay")
