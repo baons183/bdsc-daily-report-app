@@ -28,7 +28,7 @@ func RenderEmailHTML(data BuildInput, pdfLinkURL string) string {
 
 	b.WriteString(`<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;">`)
 	fmt.Fprintf(&b, `<p>Kính gửi: Ban Giám đốc Nhà máy,</p>`)
-	fmt.Fprintf(&b, `<p>Ban BDSC xin gửi báo cáo ngày công tác bảo dưỡng sửa chữa ngày %s như bên dưới:</p>`,
+	fmt.Fprintf(&b, `<p>Ban BDSC xin gửi báo cáo công tác bảo dưỡng sửa chữa ngày %s như bên dưới:</p>`,
 		html.EscapeString(reportDate.Format("02/01/2006")))
 	fmt.Fprintf(&b, `<ul><li><a href="%s">%s</a></li></ul>`, html.EscapeString(pdfLinkURL), html.EscapeString(linkLabel))
 
