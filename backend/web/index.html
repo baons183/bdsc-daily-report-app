@@ -32,6 +32,11 @@
   form.entry .half { grid-column: span 2; }
   form.entry .newrow { grid-column-start: 1; }
   form.entry .newrow.half { grid-column: 1 / span 2; }
+  .suco-row1 { display: flex; gap: 10px; }
+  .suco-row1 label.thietbi { flex: 3; }
+  .suco-row1 label.dm { flex: 1; }
+  .suco-row1 label.loai { flex: 2; }
+  .suco-row1 label.tg { flex: 1; }
   .btn { background: #0b4f8a; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
   .btn.danger { background: #c0392b; padding: 4px 10px; font-size: 12px; }
   #loginScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
@@ -92,27 +97,11 @@
   </div>
   <nav id="tabs"></nav>
   <main>
-    <section id="panel-suco" class="panel">
-      <form class="entry" id="form-suco">
-        <label>Thiết bị<input name="thietBi" list="assets-suco" autocomplete="off" required><datalist id="assets-suco"></datalist></label>
-        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
-        <label>TG dừng PX (h)<input name="thoiGianDungPX" type="number" step="any"></label>
-        <label>TG dừng TB (h)<input name="thoiGianDungTB" type="number" step="any"></label>
-        <label class="half">Tình trạng<textarea name="tinhTrang"></textarea></label>
-        <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
-        <label>Đơn vị thực hiện<input name="donVi"></label>
-        <label>Thời hạn<input name="thoiHan" type="date"></label>
-        <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
-        <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
-        <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
-      </form>
-      <div style="overflow-x:auto"><table id="table-suco"></table></div>
-    </section>
 
     <section id="panel-giamsat" class="panel">
       <form class="entry" id="form-giamsat">
         <label>Thiết bị<input name="thietBi" list="assets-giamsat" autocomplete="off" required><datalist id="assets-giamsat"></datalist></label>
-        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+        <label>Phòng<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
         <label class="half newrow">Tình trạng<textarea name="tinhTrang"></textarea></label>
         <label class="half">Rủi ro<textarea name="ruiRo"></textarea></label>
         <label class="full">Phương án xử lý<textarea name="phuongAn"></textarea></label>
@@ -128,7 +117,7 @@
     <section id="panel-congviec" class="panel">
       <form class="entry" id="form-congviec">
         <label>Thiết bị<input name="thietBi" list="assets-congviec" autocomplete="off" required><datalist id="assets-congviec"></datalist></label>
-        <label>Đơn vị mã<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+        <label>Phòng<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
         <label class="half newrow">Nội dung công việc<textarea name="noiDung"></textarea></label>
         <label>Kế hoạch<input name="keHoach"></label>
         <label>Tiến độ (%)<input name="tienDo" type="number" step="any"></label>
@@ -165,23 +154,51 @@
     </section>
 
     <section id="panel-kpi" class="panel">
-      <p>Nhập đủ 5 chỉ tiêu rồi bấm Lưu — mỗi lần lưu sẽ ghi đè số liệu KPI của hôm nay.</p>
-      <table id="table-kpi-edit" class="kpi-table">
-        <thead>
-          <tr>
-            <th rowspan="2">TT</th>
-            <th rowspan="2">Nhóm</th>
-            <th rowspan="2">Chỉ tiêu</th>
-            <th rowspan="2">ĐVT</th>
-            <th colspan="2">Hôm nay</th>
-            <th rowspan="2">Lũy kế tháng</th>
-            <th rowspan="2">Đánh giá</th>
-          </tr>
-          <tr><th>KH</th><th>TH</th></tr>
-        </thead>
-        <tbody id="kpi-rows"></tbody>
-      </table>
-      <button class="btn" onclick="saveKPI()">Lưu KPI</button>
+      <div id="kpi-block">
+        <p>Nhập Kế hoạch rồi bấm Lưu. Thực hiện của Sự cố/Near Miss/Technical event tự đếm từ mục Sự cố bên dưới — không cần nhập tay. Lũy kế tháng cũng tự tính (cộng dồn từ đầu tháng). Đánh giá tự tính (Thực hiện ≤ Kế hoạch là Đạt).</p>
+        <table id="table-kpi-edit" class="kpi-table">
+          <thead>
+            <tr>
+              <th rowspan="2">TT</th>
+              <th rowspan="2">Nhóm</th>
+              <th rowspan="2">Chỉ tiêu</th>
+              <th rowspan="2">ĐVT</th>
+              <th colspan="2">Hôm nay</th>
+              <th rowspan="2">Lũy kế tháng</th>
+              <th rowspan="2">Đánh giá</th>
+            </tr>
+            <tr><th>KH</th><th>TH</th></tr>
+          </thead>
+          <tbody id="kpi-rows"></tbody>
+        </table>
+        <button class="btn" onclick="saveKPI()">Lưu KPI</button>
+      </div>
+
+      <div id="suco-block" style="margin-top:24px">
+        <h3>Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</h3>
+        <form class="entry" id="form-suco">
+          <div class="full suco-row1">
+            <label class="thietbi">Thiết bị<input name="thietBi" list="assets-suco" autocomplete="off" required><datalist id="assets-suco"></datalist></label>
+            <label class="dm">Phòng<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
+            <label class="loai">Loại sự cố<select name="loaiSuCo" required>
+              <option value="">-- Chọn --</option>
+              <option value="Accident">Accident</option>
+              <option value="Near Miss">Near Miss</option>
+              <option value="Technical Event">Technical Event</option>
+            </select></label>
+            <label class="tg">TG dừng PX (h)<input name="thoiGianDungPX" type="number" step="any"></label>
+            <label class="tg">TG dừng TB (h)<input name="thoiGianDungTB" type="number" step="any"></label>
+          </div>
+          <label class="half">Tình trạng<textarea name="tinhTrang"></textarea></label>
+          <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
+          <label>Đơn vị thực hiện<input name="donVi"></label>
+          <label>Thời hạn<input name="thoiHan" type="date"></label>
+          <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
+          <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+          <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
+        </form>
+        <div style="overflow-x:auto"><table id="table-suco"></table></div>
+      </div>
     </section>
 
     <section id="panel-admin" class="panel">
@@ -201,6 +218,10 @@
         <button class="btn" style="margin-top:0" onclick="addScheduleOverride()">Thêm ngoại lệ</button>
       </div>
       <table id="table-overrides"></table>
+
+      <h3>Số lũy kế tháng ban đầu (KPI)</h3>
+      <p>App mới bắt đầu tính lũy kế tháng từ ngày triển khai — nếu tháng này đã có phát sinh từ trước đó, nhập số đã có sẵn vào đây để cộng dồn cho đúng. Chỉ áp dụng cho tháng hiện tại; sang tháng sau tự động về 0.</p>
+      <table id="table-kpi-baseline"></table>
     </section>
   </main>
 </div>

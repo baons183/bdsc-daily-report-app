@@ -69,6 +69,7 @@ CREATE TABLE dbo.SuCo (
   TT INT NOT NULL,
   ThietBi NVARCHAR(300) NOT NULL,
   DM NVARCHAR(20) NULL,
+  LoaiSuCo NVARCHAR(30) NULL,
   TinhTrang NVARCHAR(MAX) NULL,
   ThoiGianDungPX FLOAT NULL,
   ThoiGianDungTB FLOAT NULL,
@@ -162,6 +163,28 @@ CREATE TABLE dbo.ScheduleOverrides (
   OverrideDate DATE NOT NULL UNIQUE,
   CreatedBy NVARCHAR(50) NULL,
   CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+-- Additive column for tables that already existed before LoaiSuCo was
+-- introduced (CREATE TABLE above only applies to a brand-new database).
+IF COL_LENGTH('dbo.SuCo', 'LoaiSuCo') IS NULL
+ALTER TABLE dbo.SuCo ADD LoaiSuCo NVARCHAR(30) NULL;
+
+-- One-time starting offset added into "Lũy kế tháng" for a given
+-- ChiTieu+YearMonth — needed because this app went live mid-month, so its
+-- own auto-computed month-to-date sum is missing whatever already
+-- happened earlier that month before the app existed. An Admin sets this
+-- once for the current month; a new month simply has no row here yet, so
+-- it naturally starts back at 0 with no extra logic needed.
+IF OBJECT_ID('dbo.KPIBaseline', 'U') IS NULL
+CREATE TABLE dbo.KPIBaseline (
+  Id INT IDENTITY(1,1) PRIMARY KEY,
+  ChiTieu NVARCHAR(100) NOT NULL,
+  YearMonth CHAR(7) NOT NULL,
+  BaselineValue FLOAT NOT NULL DEFAULT 0,
+  CreatedBy NVARCHAR(50) NULL,
+  CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+  CONSTRAINT UQ_KPIBaseline UNIQUE (ChiTieu, YearMonth)
 );
 `
 

@@ -1,9 +1,11 @@
 // Khớp đúng bố cục bảng KPI trong file Word gốc: TT/Nhóm gộp dọc theo nhóm,
 // "groupSize" chỉ đặt ở chỉ tiêu đầu nhóm (số dòng cần rowspan).
+// "auto: true" = Thực hiện tự đếm từ mục Sự cố (server tính, không cho gõ
+// tay — xem report.KPIAutoCountMap phía Go).
 const KPI_CATEGORIES = [
-  { tt: 1, nhom: "Sự cố", chiTieu: "Sự cố", dvt: "Vụ", groupSize: 3 },
-  { tt: 1, nhom: "Sự cố", chiTieu: "Near Miss", dvt: "Vụ" },
-  { tt: 1, nhom: "Sự cố", chiTieu: "Technical event", dvt: "Vụ" },
+  { tt: 1, nhom: "Sự cố", chiTieu: "Sự cố", dvt: "Vụ", groupSize: 3, auto: true },
+  { tt: 1, nhom: "Sự cố", chiTieu: "Near Miss", dvt: "Vụ", auto: true },
+  { tt: 1, nhom: "Sự cố", chiTieu: "Technical event", dvt: "Vụ", auto: true },
   { tt: 2, nhom: "Chất lượng", chiTieu: "Rework", dvt: "WO", groupSize: 1 },
   { tt: 3, nhom: "Hỏng thiết bị", chiTieu: "Dừng ngoài kế hoạch", dvt: "Vụ", groupSize: 1 },
 ];
@@ -45,6 +47,9 @@ function attachAssetAutocomplete(formEl) {
 
 function hasRole(r) {
   return ROLES.split(",").map(s => s.trim()).includes(r) || ROLES.includes("Admin");
+}
+function hasAnyRole(roles) {
+  return roles.some(hasRole);
 }
 
 async function api(path, opts = {}) {
@@ -132,8 +137,7 @@ function showApp() {
 }
 
 const TAB_DEFS = [
-  { id: "kpi", label: "KPI", role: "KPI" },
-  { id: "suco", label: "Sự cố", role: "SuCo" },
+  { id: "kpi", label: "KPI - Sự cố", role: ["KPI", "SuCo"] },
   { id: "giamsat", label: "Giám sát/Chẩn đoán", role: "GiamSat" },
   { id: "congviec", label: "Công việc", role: "CongViec" },
   { id: "cbm", label: "Giám sát trực tuyến", role: null },
@@ -146,7 +150,7 @@ function buildTabs() {
   nav.innerHTML = "";
   let first = null;
   TAB_DEFS.forEach(t => {
-    if (t.role && !hasRole(t.role)) return;
+    if (t.role && !(Array.isArray(t.role) ? hasAnyRole(t.role) : hasRole(t.role))) return;
     if (!first) first = t.id;
     const btn = document.createElement("button");
     btn.textContent = t.label;
@@ -160,7 +164,7 @@ function buildTabs() {
 function switchTab(id) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === id));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
-  const loaders = { suco: loadSuCo, giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, kpi: loadKPI, admin: loadScheduleOverrides };
+  const loaders = { giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, kpi: loadKPISuCoPanel, admin: loadAdminPanel };
   if (loaders[id]) loaders[id]().catch(e => alert("Lỗi tải dữ liệu: " + e.message));
 }
 
@@ -216,10 +220,10 @@ async function loadSuCo() {
   const rows = (await api("/api/suco")) || [];
   ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-suco");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
       <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
     rows.map(r => `<tr>
-      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
+      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${r.thoiGianDungPX ?? ""}</td><td>${r.thoiGianDungTB ?? ""}</td>
       <td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
       <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td>
@@ -230,7 +234,7 @@ function editSuCo(id) {
   const r = ROWS_CACHE.suco[id];
   if (!r) return;
   enterEditMode(document.getElementById("form-suco"), id, {
-    thietBi: r.thietBi, dm: r.dm, tinhTrang: r.tinhTrang,
+    thietBi: r.thietBi, dm: r.dm, loaiSuCo: r.loaiSuCo, tinhTrang: r.tinhTrang,
     thoiGianDungPX: r.thoiGianDungPX ?? "", thoiGianDungTB: r.thoiGianDungTB ?? "",
     phuongAn: r.phuongAn, donVi: r.donVi, thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "",
     deXuat: r.deXuat, luuY: r.luuY,
@@ -250,6 +254,7 @@ document.getElementById("form-suco").addEventListener("submit", async e => {
     form.reset();
   }
   loadSuCo();
+  refreshKPIAutoCells(); // KPI Sự cố/Near Miss/Technical event tự đếm từ đây, cần cập nhật theo
 });
 
 // ---- Giám sát ----
@@ -257,7 +262,7 @@ async function loadGiamSat() {
   const rows = (await api("/api/giamsat")) || [];
   ROWS_CACHE.giamsat = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-giamsat");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
       <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
@@ -295,7 +300,7 @@ async function loadCongViec() {
   const rows = (await api("/api/congviec")) || [];
   ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-congviec");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>DM</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
+  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
       <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Ảnh</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? ""}</td>
@@ -332,12 +337,6 @@ document.getElementById("form-congviec").addEventListener("submit", async e => {
   attachAssetAutocomplete(document.getElementById(id));
 });
 
-function kpiDanhGiaSelect(value) {
-  const options = ["", "Đạt", "Không đạt"];
-  return `<select class="k-dg">` +
-    options.map(o => `<option value="${esc(o)}"${o === (value || "") ? " selected" : ""}>${o || "-"}</option>`).join("") +
-    `</select>`;
-}
 
 // ---- Giám sát trực tuyến (CBM) — chỉ xem, dữ liệu tự động từ hệ thống ngoài ----
 async function loadCBM() {
@@ -464,7 +463,16 @@ function renderReportView(d) {
   `;
 }
 
-// ---- KPI ----
+// ---- KPI - Sự cố (trang gộp) ----
+async function loadKPISuCoPanel() {
+  document.getElementById("kpi-block").hidden = !hasRole("KPI");
+  document.getElementById("suco-block").hidden = !hasRole("SuCo");
+  const tasks = [];
+  if (hasRole("KPI")) tasks.push(loadKPI());
+  if (hasRole("SuCo")) tasks.push(loadSuCo());
+  await Promise.all(tasks);
+}
+
 async function loadKPI() {
   const existing = (await api("/api/kpi")) || [];
   const byChiTieu = Object.fromEntries(existing.map(k => [k.chiTieu, k]));
@@ -476,31 +484,85 @@ async function loadKPI() {
     const groupCells = c.groupSize
       ? `<td rowspan="${c.groupSize}">${c.tt}</td><td rowspan="${c.groupSize}" class="left">${esc(c.nhom)}</td>`
       : "";
-    return `<tr data-idx="${i}">
+    // Thực hiện của các chỉ tiêu "auto" là server tự đếm từ mục Sự cố — chỉ
+    // hiển thị, không cho gõ tay (xem app.js loadKPISuCoPanel/report.go).
+    const thCell = c.auto
+      ? `<td class="k-th-display">${e.thucHien ?? 0}</td>`
+      : `<td><input class="k-th" type="number" step="any" placeholder="0" value="${e.thucHien ?? 0}"></td>`;
+    return `<tr data-idx="${i}" data-orig-th="${e.thucHien ?? 0}" data-orig-lk="${e.luyKeThang ?? 0}">
       ${groupCells}
       <td class="left">${esc(c.chiTieu)}<input type="hidden" class="k-chitieu" value="${esc(c.chiTieu)}"></td>
       <td>${esc(c.dvt)}<input type="hidden" class="k-dvt" value="${esc(c.dvt)}"></td>
-      <td><input class="k-kh" type="number" step="any" placeholder="0" value="${e.keHoach ?? ""}"></td>
-      <td><input class="k-th" type="number" step="any" placeholder="0" value="${e.thucHien ?? ""}"></td>
-      <td><input class="k-lk" type="number" step="any" placeholder="0" value="${e.luyKeThang ?? ""}"></td>
-      <td>${kpiDanhGiaSelect(e.danhGia)}</td>
+      <td><input class="k-kh" type="number" step="any" placeholder="0" value="${e.keHoach ?? 0}"></td>
+      ${thCell}
+      <td class="k-lk-display">${e.luyKeThang ?? 0}</td>
+      <td class="k-dg-display">${esc(e.danhGia || "")}</td>
     </tr>`;
   }).join("");
+
+  // Gõ Kế hoạch/Thực hiện là tính Đánh giá (và với 2 chỉ tiêu nhập tay,
+  // Lũy kế tháng) ngay trên trình duyệt, khỏi đợi bấm Lưu KPI mới thấy —
+  // khớp đúng công thức server dùng (report.KPIDanhGia/ApplyKPIAutoCounts).
+  document.querySelectorAll("#kpi-rows tr").forEach(tr => {
+    tr.querySelectorAll(".k-kh, .k-th").forEach(inp => {
+      inp.addEventListener("input", () => liveUpdateDanhGia(tr));
+    });
+  });
+}
+function liveUpdateDanhGia(tr) {
+  const khInput = tr.querySelector(".k-kh");
+  const thInput = tr.querySelector(".k-th");
+  const thDisplay = tr.querySelector(".k-th-display");
+  const kh = khInput ? khInput.value : 0;
+  const th = thInput ? thInput.value : (thDisplay ? thDisplay.textContent : 0);
+  const dg = tr.querySelector(".k-dg-display");
+  if (dg) dg.textContent = (Number(th) || 0) <= (Number(kh) || 0) ? "Đạt" : "Không đạt";
+
+  // Lũy kế tháng của 2 chỉ tiêu nhập tay (Rework, Dừng ngoài kế hoạch) là
+  // tổng Thực hiện đã lưu mỗi ngày trong tháng — số hiển thị lúc tải trang
+  // đã gồm sẵn giá trị CŨ của hôm nay, nên xem trước = số đó trừ giá trị cũ
+  // cộng số mới đang gõ.
+  if (thInput) {
+    const origTh = Number(tr.dataset.origTh || 0);
+    const origLk = Number(tr.dataset.origLk || 0);
+    const lk = tr.querySelector(".k-lk-display");
+    if (lk) lk.textContent = origLk - origTh + (Number(thInput.value) || 0);
+  }
 }
 async function saveKPI() {
-  const rows = [...document.querySelectorAll("#kpi-rows tr")].map(tr => ({
-    chiTieu: tr.querySelector(".k-chitieu").value,
-    nhom: KPI_CATEGORIES[Number(tr.dataset.idx)].nhom,
-    dvt: tr.querySelector(".k-dvt").value,
-    keHoach: numOrNull(tr.querySelector(".k-kh").value),
-    thucHien: numOrNull(tr.querySelector(".k-th").value),
-    luyKeThang: numOrNull(tr.querySelector(".k-lk").value),
-    danhGia: tr.querySelector(".k-dg").value,
-  }));
+  const rows = [...document.querySelectorAll("#kpi-rows tr")].map(tr => {
+    const thInput = tr.querySelector(".k-th");
+    return {
+      chiTieu: tr.querySelector(".k-chitieu").value,
+      nhom: KPI_CATEGORIES[Number(tr.dataset.idx)].nhom,
+      dvt: tr.querySelector(".k-dvt").value,
+      keHoach: numOrNull(tr.querySelector(".k-kh").value),
+      thucHien: thInput ? numOrNull(thInput.value) : null,
+    };
+  });
   await api("/api/kpi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rows) });
   alert("Đã lưu KPI hôm nay.");
+  loadKPI();
 }
 function numOrNull(v) { return v === "" ? null : Number(v); }
+
+// Cập nhật số đếm tự động + Đánh giá sau khi Sự cố thay đổi, mà KHÔNG vẽ
+// lại toàn bộ bảng KPI (tránh xoá mất Kế hoạch người dùng đang gõ dở mà
+// chưa bấm Lưu KPI).
+async function refreshKPIAutoCells() {
+  const existing = (await api("/api/kpi")) || [];
+  const byChiTieu = Object.fromEntries(existing.map(k => [k.chiTieu, k]));
+  document.querySelectorAll("#kpi-rows tr").forEach(tr => {
+    const chiTieu = tr.querySelector(".k-chitieu").value;
+    const e = byChiTieu[chiTieu] || {};
+    const th = tr.querySelector(".k-th-display");
+    if (th) th.textContent = e.thucHien ?? 0;
+    const lk = tr.querySelector(".k-lk-display");
+    if (lk) lk.textContent = e.luyKeThang ?? 0;
+    const dg = tr.querySelector(".k-dg-display");
+    if (dg) dg.textContent = e.danhGia || "";
+  });
+}
 
 // ---- Admin ----
 document.getElementById("form-user").addEventListener("submit", async e => {
@@ -510,6 +572,10 @@ document.getElementById("form-user").addEventListener("submit", async e => {
   e.target.reset();
   alert("Đã tạo tài khoản.");
 });
+
+async function loadAdminPanel() {
+  await Promise.all([loadScheduleOverrides(), loadKPIBaseline()]);
+}
 
 // ---- Ngày ngoại lệ chạy báo cáo vào Thứ 7/CN ----
 async function loadScheduleOverrides() {
@@ -532,6 +598,25 @@ async function deleteScheduleOverride(id) {
   if (!confirm("Xóa ngoại lệ này?")) return;
   await api(`/api/schedule-overrides/${id}`, { method: "DELETE" });
   loadScheduleOverrides();
+}
+
+// ---- Số lũy kế tháng ban đầu (KPI) ----
+async function loadKPIBaseline() {
+  const rows = (await api("/api/kpi-baseline")) || [];
+  const t = document.getElementById("table-kpi-baseline");
+  t.innerHTML = `<tr><th>Chỉ tiêu</th><th>Tháng</th><th>Số lũy kế có sẵn</th><th></th></tr>` +
+    rows.map(r => `<tr data-chitieu="${esc(r.chiTieu)}">
+      <td>${esc(r.chiTieu)}</td><td>${esc(r.yearMonth)}</td>
+      <td><input class="kb-value" type="number" step="any" value="${r.baselineValue}"></td>
+      <td><button class="btn" style="margin-top:0" onclick="saveKPIBaseline(this)">Lưu</button></td>
+    </tr>`).join("");
+}
+async function saveKPIBaseline(btn) {
+  const tr = btn.closest("tr");
+  const chiTieu = tr.dataset.chitieu;
+  const baselineValue = Number(tr.querySelector(".kb-value").value) || 0;
+  await api("/api/kpi-baseline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chiTieu, baselineValue }) });
+  alert("Đã lưu.");
 }
 function reportTestDateQuery() {
   const date = document.getElementById("thongke-date").value;
@@ -566,7 +651,7 @@ async function delRow(kind, id) {
     alert("Không xóa được: " + e.message);
     return;
   }
-  if (kind === "suco") loadSuCo();
+  if (kind === "suco") { loadSuCo(); refreshKPIAutoCells(); }
   if (kind === "giamsat") loadGiamSat();
   if (kind === "congviec") loadCongViec();
 }

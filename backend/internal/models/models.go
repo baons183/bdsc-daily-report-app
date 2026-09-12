@@ -15,6 +15,7 @@ type SuCo struct {
 	TT             int       `json:"tt"`
 	ThietBi        string    `json:"thietBi"`
 	DM             string    `json:"dm"`
+	LoaiSuCo       string    `json:"loaiSuCo"`
 	TinhTrang      string    `json:"tinhTrang"`
 	ThoiGianDungPX *float64  `json:"thoiGianDungPX"`
 	ThoiGianDungTB *float64  `json:"thoiGianDungTB"`

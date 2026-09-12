@@ -43,7 +43,7 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 	if err != nil {
 		return BuildInput{}, err
 	}
-	kpi, err := fetchKPI(ctx, db, runAt)
+	kpi, err := fetchKPI(ctx, db, runAt, start, end)
 	if err != nil {
 		return BuildInput{}, err
 	}

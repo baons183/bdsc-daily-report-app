@@ -497,8 +497,8 @@ func (b *builder) sectionKPI(rows []models.KPIEntry) {
 			if ok && k.DVT != "" {
 				dvt = k.DVT
 			}
-			danhGia := "Đạt"
-			if ok && strings.TrimSpace(k.DanhGia) != "" {
+			danhGia := ""
+			if ok {
 				danhGia = k.DanhGia
 			}
 			ry := y + float64(gi)*rowH

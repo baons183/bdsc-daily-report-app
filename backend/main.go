@@ -63,6 +63,9 @@ func main() {
 	mux.Handle("GET /api/kpi", authMw(http.HandlerFunc(env.ListKPI)))
 	mux.Handle("POST /api/kpi", authMw(http.HandlerFunc(auth.RequireRole("KPI", env.SaveKPI))))
 
+	mux.Handle("GET /api/kpi-baseline", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.ListKPIBaseline))))
+	mux.Handle("POST /api/kpi-baseline", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetKPIBaseline))))
+
 	mux.Handle("POST /api/users", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.CreateUser))))
 
 	mux.Handle("GET /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.ListScheduleOverrides))))

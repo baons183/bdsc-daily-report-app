@@ -13,7 +13,7 @@ import (
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 	start, end := window.EntryWindow(time.Now())
 	rows, err := e.DB.QueryContext(r.Context(), `
-SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
+SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
 FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
 	if err != nil {
@@ -24,7 +24,7 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL
 	out := []models.SuCo{}
 	for rows.Next() {
 		var s models.SuCo
-		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
+		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.LoaiSuCo, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
 			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
 			writeErr(w, 500, err.Error())
 			return
@@ -42,6 +42,10 @@ func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.ThietBi == "" {
 		writeErr(w, 400, "thieu Thiet bi")
+		return
+	}
+	if !validLoaiSuCo(in.LoaiSuCo) {
+		writeErr(w, 400, "thieu hoac sai Loai su co (Accident/Near Miss/Technical Event)")
 		return
 	}
 	now := time.Now()
@@ -66,10 +70,10 @@ func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
 	}
 	var newID int64
 	err = tx.QueryRowContext(r.Context(), `
-INSERT INTO dbo.SuCo (TT, ThietBi, DM, TinhTrang, ThoiGianDungPX, ThoiGianDungTB, PhuongAn, DonVi, ThoiHan, DeXuat, LuuY, NgayBaoCao, CreatedBy)
+INSERT INTO dbo.SuCo (TT, ThietBi, DM, LoaiSuCo, TinhTrang, ThoiGianDungPX, ThoiGianDungTB, PhuongAn, DonVi, ThoiHan, DeXuat, LuuY, NgayBaoCao, CreatedBy)
 OUTPUT CAST(INSERTED.Id AS BIGINT)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		tt, in.ThietBi, in.DM, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, now, createdBy).Scan(&newID)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tt, in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, now, createdBy).Scan(&newID)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -137,12 +141,29 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "thieu Thiet bi")
 		return
 	}
+	if !validLoaiSuCo(in.LoaiSuCo) {
+		writeErr(w, 400, "thieu hoac sai Loai su co (Accident/Near Miss/Technical Event)")
+		return
+	}
 	if _, err := e.DB.ExecContext(r.Context(), `
-UPDATE dbo.SuCo SET ThietBi=?, DM=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?
+UPDATE dbo.SuCo SET ThietBi=?, DM=?, LoaiSuCo=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?
 WHERE Id=?`,
-		in.ThietBi, in.DM, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, id); err != nil {
+		in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// validLoaiSuCo checks that a Sự cố row is classified as one of the 3 fixed
+// incident types — required because the KPI tab auto-counts these rows by
+// type (see report.KPIAutoCountMap), so an unclassified row would silently
+// never be counted anywhere.
+func validLoaiSuCo(v string) bool {
+	switch v {
+	case "Accident", "Near Miss", "Technical Event":
+		return true
+	default:
+		return false
+	}
 }

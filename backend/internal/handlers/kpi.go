@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"bdscdailyreport/internal/models"
+	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
 )
 
@@ -37,6 +38,11 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ? ORDER BY Id`, today)
 			return
 		}
 		out = append(out, k)
+	}
+	start, end := window.EntryWindow(time.Now())
+	if err := report.ApplyKPIAutoCounts(r.Context(), e.DB, out, start, end); err != nil {
+		writeErr(w, 500, err.Error())
+		return
 	}
 	writeJSON(w, 200, out)
 }
