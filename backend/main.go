@@ -87,8 +87,8 @@ func main() {
 	}))))
 
 	mux.Handle("POST /api/report/send-test-email", authMw(http.HandlerFunc(auth.RequireRole("Admin", func(w http.ResponseWriter, r *http.Request) {
-		if cfg.EmailFlowURL == "" {
-			http.Error(w, "chua cau hinh EMAIL_FLOW_URL trong .env", 400)
+		if cfg.EmailFlowTestURL == "" {
+			http.Error(w, "chua cau hinh EMAIL_FLOW_TEST_URL trong .env", 400)
 			return
 		}
 		runAt, err := parseRunAt(r)
@@ -101,9 +101,12 @@ func main() {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		// Nut test luon di qua Flow test rieng (EMAIL_FLOW_TEST_URL), khong
+		// bao gio dung EMAIL_FLOW_URL that - tranh gui nham email that cho
+		// Ban Giam doc chi vi dang thu nghiem.
 		// Cung ngay hien thi tren PDF/ten file (hom qua, vi cua so du lieu la
 		// 8:01 hom qua -> 7:59 hom nay), khong phai ngay sinh bao cao.
-		if err := emailer.SendReportPDF(cfg.EmailFlowURL, path, runAt.AddDate(0, 0, -1)); err != nil {
+		if err := emailer.SendReportPDF(cfg.EmailFlowTestURL, path, runAt.AddDate(0, 0, -1)); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
