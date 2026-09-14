@@ -148,6 +148,7 @@ const TAB_DEFS = [
   { id: "congviec", label: "Công việc", role: ["CongViec", "Moderator"] },
   { id: "cbm", label: "Giám sát trực tuyến", role: null },
   { id: "thongke", label: "Thống kê", role: null },
+  { id: "weekly", label: "Báo cáo tuần", role: null },
   { id: "admin", label: "Quản trị", role: "Admin" },
 ];
 
@@ -170,7 +171,7 @@ function buildTabs() {
 function switchTab(id) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === id));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
-  const loaders = { giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, kpi: loadKPISuCoPanel, admin: loadAdminPanel };
+  const loaders = { giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, weekly: initWeeklyReport, kpi: loadKPISuCoPanel, admin: loadAdminPanel };
   if (loaders[id]) loaders[id]().catch(e => alert("Lỗi tải dữ liệu: " + e.message));
 }
 
@@ -397,6 +398,110 @@ async function loadThongKe() {
     return;
   }
   content.innerHTML = renderReportView(data);
+}
+
+// ---- Báo cáo tuần (Sự cố + 2 phần Giám sát, khoảng ngày tự chọn) ----
+async function initWeeklyReport() {
+  const startInput = document.getElementById("weekly-start");
+  const endInput = document.getElementById("weekly-end");
+  if (!endInput.value) {
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    startInput.value = weekAgo.toISOString().slice(0, 10);
+    endInput.value = today.toISOString().slice(0, 10);
+  }
+  return loadWeeklyReport();
+}
+
+async function loadWeeklyReport() {
+  const start = document.getElementById("weekly-start").value;
+  const end = document.getElementById("weekly-end").value;
+  const content = document.getElementById("weekly-content");
+  if (!start || !end) { content.innerHTML = "Chọn đủ Từ ngày/Đến ngày."; return; }
+  content.innerHTML = "Đang tải...";
+  let d;
+  try {
+    d = await api(`/api/report/weekly?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+  } catch (e) {
+    content.innerHTML = "Lỗi: " + e.message;
+    return;
+  }
+  content.innerHTML = renderWeeklyReport(d);
+}
+
+function renderWeeklyReport(d) {
+  const sum = d.sucoSummary || {};
+  const cbmList = d.cbm || [];
+  const giamsatList = d.giamsat || [];
+  const kpiRows = KPI_CATEGORIES.map(c => {
+    const e = (d.kpi || []).find(k => k.chiTieu === c.chiTieu) || {};
+    return [c.tt, c.nhom, c.chiTieu, c.dvt, e.keHoach ?? 0, e.thucHien ?? 0, e.luyKeThang ?? 0, e.danhGia || "-"].map(esc);
+  });
+  const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
+  const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
+  const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
+  const congviecRows = (d.congviec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
+  const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
+  const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
+  const images = d.images || [];
+
+  // Số lượng giám sát thiết bị: tổng số lượt + số thiết bị khác nhau, cho
+  // cả 2 phần Giám sát (trực tuyến + chẩn đoán), cộng thêm phân loại theo
+  // mức cảnh báo của phần trực tuyến (dữ liệu đã có sẵn, tận dụng luôn).
+  const cbmEquip = new Set(cbmList.map(c => c.equipment).filter(Boolean));
+  const giamsatEquip = new Set(giamsatList.map(s => s.thietBi).filter(Boolean));
+  const allEquip = new Set([...cbmEquip, ...giamsatEquip]);
+  const cbmByLevel = {};
+  cbmList.forEach(c => { const k = c.alarmLevel || "(khác)"; cbmByLevel[k] = (cbmByLevel[k] || 0) + 1; });
+  const cbmLevelKeys = Object.keys(cbmByLevel);
+
+  return `
+    <div class="report-view">
+      <div class="rv-heading">Các chỉ số KPI (Kế hoạch/Thực hiện cộng dồn cả khoảng đã chọn; Lũy kế tháng tính đến ngày cuối)</div>
+      <table><tr><th>TT</th><th>Nhóm</th><th>Chỉ tiêu</th><th>ĐVT</th><th>Kế hoạch</th><th>Thực hiện</th><th>Lũy kế tháng</th><th>Đánh giá</th></tr>
+        ${kpiRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}
+      </table>
+
+      <div class="rv-heading">Tổng số Sự cố theo loại</div>
+      <table><tr><th>Accident</th><th>Near Miss</th><th>Technical Event</th><th>Tổng</th></tr>
+        <tr><td>${sum["Accident"] ?? 0}</td><td>${sum["Near Miss"] ?? 0}</td><td>${sum["Technical Event"] ?? 0}</td>
+          <td>${(sum["Accident"] ?? 0) + (sum["Near Miss"] ?? 0) + (sum["Technical Event"] ?? 0)}</td></tr>
+      </table>
+
+      <div class="rv-heading">Tổng số lượt giám sát thiết bị</div>
+      <table><tr><th></th><th>Số lượt</th><th>Số thiết bị</th></tr>
+        <tr><td>Giám sát trực tuyến</td><td>${cbmList.length}</td><td>${cbmEquip.size}</td></tr>
+        <tr><td>Chẩn đoán chuyên dụng</td><td>${giamsatList.length}</td><td>${giamsatEquip.size}</td></tr>
+        <tr><td><b>Tổng</b></td><td><b>${cbmList.length + giamsatList.length}</b></td><td><b>${allEquip.size}</b></td></tr>
+      </table>
+      ${cbmLevelKeys.length ? `
+      <div class="rv-heading">Giám sát trực tuyến theo mức cảnh báo</div>
+      <table><tr>${cbmLevelKeys.map(k => `<th>${esc(k)}</th>`).join("")}</tr>
+        <tr>${cbmLevelKeys.map(k => `<td>${cbmByLevel[k]}</td>`).join("")}</tr>
+      </table>` : ""}
+
+      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
+
+      <div class="rv-heading">Giám sát trực tuyến (online monitoring)</div>
+      ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
+
+      <div class="rv-heading">Chẩn đoán bằng tool chuyên dụng</div>
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+
+      <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
+
+      <div class="rv-heading">Vấn đề cần đề xuất</div>
+      ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
+
+      <div class="rv-heading">Lưu ý quan trọng</div>
+      ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows)}
+
+      <div class="rv-heading">Một số hình ảnh thực hiện công việc tại hiện trường</div>
+      ${renderImagesTable(images)}
+    </div>
+  `;
 }
 
 function rvTable(headers, rows, emptyMsg) {

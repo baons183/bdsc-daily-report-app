@@ -154,6 +154,16 @@
       <div id="thongke-content"></div>
     </section>
 
+    <section id="panel-weekly" class="panel">
+      <p>Tổng hợp Sự cố và 2 phần Giám sát (trực tuyến + chẩn đoán) trong 1 khoảng thời gian bất kỳ — dùng cho báo cáo tuần về độ tin cậy thiết bị.</p>
+      <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label>Từ ngày: <input type="date" id="weekly-start"></label>
+        <label>Đến ngày: <input type="date" id="weekly-end"></label>
+        <button class="btn" onclick="loadWeeklyReport()" style="margin-top:0">Xem</button>
+      </div>
+      <div id="weekly-content"></div>
+    </section>
+
     <section id="panel-kpi" class="panel">
       <div id="kpi-block">
         <p>Nhập Kế hoạch rồi bấm Lưu. Thực hiện của Sự cố/Near Miss/Technical event tự đếm từ mục Sự cố bên dưới — không cần nhập tay. Lũy kế tháng cũng tự tính (cộng dồn từ đầu tháng). Đánh giá tự tính (Thực hiện ≤ Kế hoạch là Đạt).</p>

@@ -44,6 +44,7 @@ func main() {
 	mux.Handle("POST /api/change-password", authMw(http.HandlerFunc(env.ChangePassword)))
 	mux.Handle("GET /api/cbm", authMw(http.HandlerFunc(env.ListCBM)))
 	mux.Handle("GET /api/report/view", authMw(http.HandlerFunc(env.GetReportView)))
+	mux.Handle("GET /api/report/weekly", authMw(http.HandlerFunc(env.GetWeeklyReport)))
 
 	mux.Handle("GET /api/suco", authMw(http.HandlerFunc(env.ListSuCo)))
 	mux.Handle("POST /api/suco", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.CreateSuCo))))

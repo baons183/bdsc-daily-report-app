@@ -10,9 +10,12 @@ import (
 	"bdscdailyreport/internal/window"
 )
 
-func fetchSuCo(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.SuCo, error) {
+// FetchSuCo returns every dbo.SuCo row whose NgayBaoCao falls in
+// [start, end] — exported so both report generation and the "Báo cáo tuần"
+// tab can share the same query.
+func FetchSuCo(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.SuCo, error) {
 	rows, err := db.QueryContext(ctx, `
-SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
+SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
 FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
 	if err != nil {
@@ -22,7 +25,7 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL
 	out := []models.SuCo{}
 	for rows.Next() {
 		var s models.SuCo
-		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
+		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.LoaiSuCo, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
 			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
 			return nil, err
 		}
@@ -31,7 +34,10 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL
 	return out, nil
 }
 
-func fetchGiamSat(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.GiamSat, error) {
+// FetchGiamSat returns every dbo.GiamSat row whose NgayBaoCao falls in
+// [start, end] — exported so both report generation and the "Báo cáo tuần"
+// tab can share the same query.
+func FetchGiamSat(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.GiamSat, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ISNULL(RuiRo,''),
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
@@ -52,7 +58,10 @@ FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.
 	return out, nil
 }
 
-func fetchCongViec(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.CongViec, error) {
+// FetchCongViec returns every dbo.CongViec row (with attachments) whose
+// NgayBaoCao falls in [start, end] — exported so both report generation
+// and the "Báo cáo tuần" tab can share the same query.
+func FetchCongViec(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.CongViec, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(NoiDung,''), ISNULL(KeHoach,''), TienDo,
        ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
@@ -220,6 +229,65 @@ func ApplyKPIAutoCounts(ctx context.Context, db *sql.DB, rows []models.KPIEntry,
 		rows[i].DanhGia = KPIDanhGia(rows[i].KeHoach, rows[i].ThucHien)
 	}
 	return nil
+}
+
+// FetchWeeklyKPI aggregates each of the 5 fixed KPI categories over an
+// arbitrary [start, end] range for the "Báo cáo tuần" tab. Kế hoạch and
+// Thực hiện are SUMMED across the whole range (each day's figure added
+// up); Lũy kế tháng is deliberately NOT summed — it's already a running
+// total, so summing it across days would multiply-count everything before
+// the range. Instead it's read as of `end` (the last day), same as a
+// single daily report would show, plus GetKPIBaseline's offset.
+func FetchWeeklyKPI(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.KPIEntry, error) {
+	monthStart := time.Date(end.Year(), end.Month(), 1, 0, 0, 0, 0, end.Location())
+	yearMonth := end.Format("2006-01")
+
+	rangeThucHien := func(chiTieu string, s, e time.Time) (float64, error) {
+		if loai, ok := KPIAutoCountMap[chiTieu]; ok {
+			return CountSuCoByLoai(ctx, db, loai, s, e)
+		}
+		return SumKPIThucHienMonth(ctx, db, chiTieu, s, e)
+	}
+
+	out := make([]models.KPIEntry, 0, len(kpiCategories))
+	for _, cat := range kpiCategories {
+		var khSum sql.NullFloat64
+		if err := db.QueryRowContext(ctx, `
+SELECT SUM(KeHoach) FROM dbo.KPIEntries WHERE ChiTieu = ? AND NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+			cat.ChiTieu, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&khSum); err != nil {
+			return nil, err
+		}
+		keHoach := 0.0
+		if khSum.Valid {
+			keHoach = khSum.Float64
+		}
+
+		thucHien, err := rangeThucHien(cat.ChiTieu, start, end)
+		if err != nil {
+			return nil, err
+		}
+
+		luyKe, err := rangeThucHien(cat.ChiTieu, monthStart, end)
+		if err != nil {
+			return nil, err
+		}
+		base, err := GetKPIBaseline(ctx, db, cat.ChiTieu, yearMonth)
+		if err != nil {
+			return nil, err
+		}
+		luyKe += base
+
+		out = append(out, models.KPIEntry{
+			ChiTieu:    cat.ChiTieu,
+			Nhom:       cat.Nhom,
+			DVT:        cat.DVT,
+			KeHoach:    &keHoach,
+			ThucHien:   &thucHien,
+			LuyKeThang: &luyKe,
+			DanhGia:    KPIDanhGia(&keHoach, &thucHien),
+		})
+	}
+	return out, nil
 }
 
 // NoteItem is one row of the consolidated Đề xuất/Lưu ý tables — same shape
