@@ -29,14 +29,42 @@ func SendReportPDF(flowURL, emailBodyHTML string, reportDate time.Time) error {
 	if flowURL == "" {
 		return nil
 	}
-	body, err := json.Marshal(payload{
+	return postJSON(flowURL, payload{
 		ReportDate:    reportDate.Format("02/01/2006"),
 		EmailBodyHTML: emailBodyHTML,
 	})
+}
+
+type approvalPayload struct {
+	ReportDate    string `json:"report_date"`
+	ReviewedBy    string `json:"reviewed_by"`
+	EmailBodyHTML string `json:"email_body_html"`
+}
+
+// SendApprovalReminder notifies the Approvers that reportDate's report has
+// just been "Kiểm tra"'d by reviewedByName and is now awaiting their
+// Phê duyệt. A blank flowURL is treated as "email disabled".
+func SendApprovalReminder(flowURL string, reportDate time.Time, reviewedByName string) error {
+	if flowURL == "" {
+		return nil
+	}
+	dateStr := reportDate.Format("02/01/2006")
+	body := fmt.Sprintf(
+		`<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;">`+
+			`<p>Kính gửi Approver,</p>`+
+			`<p>Báo cáo ngày <b>%s</b> đã được <b>%s</b> kiểm tra, cần Phê duyệt (chỉ cần 1 trong 2 Approver phê duyệt là đủ).</p>`+
+			`<p>Vui lòng đăng nhập vào app để Phê duyệt hoặc Reject nếu cần chỉnh sửa lại.</p>`+
+			`</div>`,
+		dateStr, reviewedByName)
+	return postJSON(flowURL, approvalPayload{ReportDate: dateStr, ReviewedBy: reviewedByName, EmailBodyHTML: body})
+}
+
+func postJSON(flowURL string, v interface{}) error {
+	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, flowURL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, flowURL, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,7 @@ type reportViewResponse struct {
 	DeXuat   []report.NoteItem  `json:"deXuat"`
 	LuuY     []report.NoteItem  `json:"luuY"`
 	Images   []reportImage      `json:"images"`
+	Approval reportApprovalResp `json:"approval"`
 }
 
 // GetReportView powers the "Thống kê" tab: the same data that would go into
@@ -60,11 +61,18 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	reportDate := data.RunAt.AddDate(0, 0, -1)
+	approval, err := fetchReportApproval(e, r, reportDate.Format("2006-01-02"))
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
 	// The window spans yesterday 08:01 -> today 07:59, so the data is really
 	// "yesterday's" activity even though it's viewed/generated this morning —
 	// the displayed date reflects that, same as the PDF.
 	writeJSON(w, 200, reportViewResponse{
-		RunAt:    data.RunAt.AddDate(0, 0, -1).Format("02/01/2006"),
+		RunAt:    reportDate.Format("02/01/2006"),
 		Start:    data.Start.Format("15:04 02/01/2006"),
 		End:      data.End.Format("15:04 02/01/2006"),
 		KPI:      data.KPI,
@@ -75,5 +83,6 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		DeXuat:   report.CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec),
 		LuuY:     report.CombineLuuY(data.SuCo, data.GiamSat, data.CongViec),
 		Images:   images,
+		Approval: approval,
 	})
 }

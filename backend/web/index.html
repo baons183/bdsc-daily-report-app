@@ -218,7 +218,7 @@
         <label>Mã nhân viên<input name="employeeCode" required></label>
         <label>Họ tên<input name="fullName"></label>
         <label>Mật khẩu<input name="password" type="password" required></label>
-        <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin)<input name="roles"></label>
+        <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin,Moderator,Approver)<input name="roles"></label>
         <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
       </form>
 
@@ -248,6 +248,14 @@
           <button class="btn" style="margin-top:0" onclick="addScheduleOverride()">Thêm ngoại lệ</button>
         </div>
         <table id="table-overrides"></table>
+      </div>
+
+      <h3>Hạn Kiểm tra / Phê duyệt báo cáo</h3>
+      <p>Nếu tới giờ Kiểm tra mà chưa ai Kiểm tra, hệ thống tự động Kiểm tra (khoá dữ liệu, gửi email Approver). Nếu tới giờ Phê duyệt mà chưa ai Phê duyệt, hệ thống tự động Phê duyệt. Đổi ở đây có tác dụng trong vòng ~20 giây, không cần khởi động lại app.</p>
+      <div style="display:flex; gap:20px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+        <label style="font-weight:normal;">Hạn Kiểm tra <input type="time" id="kiemTraDeadline"></label>
+        <label style="font-weight:normal;">Hạn Phê duyệt <input type="time" id="pheDuyetDeadline"></label>
+        <button class="btn" style="margin-top:0" onclick="saveApprovalSchedule()">Lưu</button>
       </div>
 
       <h3>Số lũy kế tháng ban đầu (KPI)</h3>

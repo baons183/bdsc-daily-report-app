@@ -49,6 +49,9 @@ func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
+	if !checkNotLocked(w, r, e.DB, now) {
+		return
+	}
 	start, end := window.EntryWindow(now)
 
 	tx, err := e.DB.BeginTx(r.Context(), nil)
@@ -105,6 +108,9 @@ func (e *Env) DeleteSuCo(w http.ResponseWriter, r *http.Request) {
 	if !checkOwnership(w, r, createdBy) {
 		return
 	}
+	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
+		return
+	}
 	if _, err := e.DB.ExecContext(r.Context(), `DELETE FROM dbo.SuCo WHERE Id = ?`, id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -125,11 +131,15 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var createdBy string
-	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,'') FROM dbo.SuCo WHERE Id = ?`, id).Scan(&createdBy); err != nil {
+	var ngayBaoCao time.Time
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.SuCo WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
 	if !checkEditOwnership(w, r, createdBy) {
+		return
+	}
+	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
 		return
 	}
 	var in models.SuCo

@@ -25,6 +25,10 @@ type BuildInput struct {
 	CBM        []models.CBMRow
 	UploadsDir string
 	OutDir     string
+	// Names to print in the PDF's "NGƯỜI LẬP"/"PHÊ DUYỆT" signature boxes —
+	// blank if nobody has Kiểm tra/Phê duyệt'd this report date yet.
+	ReviewedByName string
+	ApprovedByName string
 }
 
 // GatherData collects everything a report for `runAt`'s window needs,
@@ -34,15 +38,15 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 	ctx := context.Background()
 	start, end := window.ReportWindow(runAt)
 
-	suco, err := fetchSuCo(ctx, db, start, end)
+	suco, err := FetchSuCo(ctx, db, start, end)
 	if err != nil {
 		return BuildInput{}, err
 	}
-	giamsat, err := fetchGiamSat(ctx, db, start, end)
+	giamsat, err := FetchGiamSat(ctx, db, start, end)
 	if err != nil {
 		return BuildInput{}, err
 	}
-	congviec, err := fetchCongViec(ctx, db, start, end)
+	congviec, err := FetchCongViec(ctx, db, start, end)
 	if err != nil {
 		return BuildInput{}, err
 	}
@@ -52,10 +56,17 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 	}
 	cbm := ReadCBMExcel(cbmExcelPath, start, end)
 
+	reportDate := runAt.AddDate(0, 0, -1).Format("2006-01-02")
+	var reviewedByName, approvedByName sql.NullString
+	db.QueryRowContext(ctx, `SELECT ReviewedByName, ApprovedByName FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
+		Scan(&reviewedByName, &approvedByName)
+
 	return BuildInput{
 		RunAt: runAt, Start: start, End: end,
 		KPI: kpi, SuCo: suco, GiamSat: giamsat, CongViec: congviec, CBM: cbm,
-		UploadsDir: uploadsDir,
+		UploadsDir:     uploadsDir,
+		ReviewedByName: reviewedByName.String,
+		ApprovedByName: approvedByName.String,
 	}, nil
 }
 

@@ -30,7 +30,7 @@ func main() {
 	}
 	log.Printf("da ket noi database %s/%s", cfg.DBServer, cfg.DBDatabase)
 
-	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath}
+	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL}
 
 	mux := http.NewServeMux()
 
@@ -82,6 +82,14 @@ func main() {
 	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
 	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))
 
+	mux.Handle("GET /api/approval-schedule", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetApprovalSchedule))))
+	mux.Handle("POST /api/approval-schedule", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetApprovalSchedule))))
+
+	mux.Handle("GET /api/report-approval", authMw(http.HandlerFunc(env.GetReportApproval)))
+	mux.Handle("POST /api/report-approval/review", authMw(http.HandlerFunc(auth.RequireRole("Moderator", env.ReviewReport))))
+	mux.Handle("POST /api/report-approval/approve", authMw(http.HandlerFunc(auth.RequireRole("Approver", env.ApproveReport))))
+	mux.Handle("POST /api/report-approval/reject", authMw(http.HandlerFunc(auth.RequireRole("Approver", env.RejectReport))))
+
 	mux.Handle("POST /api/report/run-now", authMw(http.HandlerFunc(auth.RequireRole("Admin", func(w http.ResponseWriter, r *http.Request) {
 		runAt, err := parseRunAt(r)
 		if err != nil {
@@ -129,6 +137,7 @@ func main() {
 
 	go scheduleDailyReport(conn, cfg)
 	go scheduleKPICarryForward(conn, cfg)
+	go scheduleApprovalDeadlines(conn, env)
 
 	log.Printf("dang chay tren cong %s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, withCORS(mux)))
@@ -254,6 +263,99 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ?`,
 		log.Printf("da tu dong sao chep %d dong KPI tu ngay %s sang ngay %s", n, source, target)
 	}
 	return nil
+}
+
+// scheduleApprovalDeadlines polls every 20s for whether "now" matches
+// either of the Admin-configured Kiểm tra/Phê duyệt deadline times
+// (env.EffectiveApprovalSchedule). If the Kiểm tra deadline passes and
+// nobody has reviewed the currently-active report yet (still "draft"), it
+// auto-performs Kiểm tra as BS00444 (locking the data) and emails the
+// Approvers. If the Phê duyệt deadline passes and nobody has approved yet
+// (still "reviewed"), it auto-fills Phê duyệt as BS00742. Both fallback
+// employee codes were given explicitly by the user rather than picked by
+// this code. window.CurrentReportDate resolves "which printed report is
+// currently up for review" at wall-clock time now — NOT the same date
+// window.ReportDateForEntry would give a row entered at this same moment
+// (see internal/window/window.go for the distinction).
+func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
+	const autoReviewerCode = "BS00444"
+	const autoApproverCode = "BS00742"
+	lastReviewDate := ""
+	lastApproveDate := ""
+	for {
+		time.Sleep(20 * time.Second)
+		now := time.Now()
+		kh, km, ph, pm := env.EffectiveApprovalSchedule()
+		reportDate := window.CurrentReportDate(now).Format("2006-01-02")
+
+		if now.Hour() == kh && now.Minute() == km && reportDate != lastReviewDate {
+			lastReviewDate = reportDate
+			status, err := currentApprovalStatus(conn, reportDate)
+			if err != nil {
+				log.Printf("loi kiem tra trang thai bao cao %s de tu dong Kiem tra: %v", reportDate, err)
+			} else if status == "draft" {
+				name := userFullName(conn, autoReviewerCode)
+				if err := autoReview(conn, reportDate, autoReviewerCode, name); err != nil {
+					log.Printf("loi tu dong Kiem tra bao cao %s: %v", reportDate, err)
+				} else {
+					log.Printf("da tu dong Kiem tra bao cao %s (qua han, gan cho %s)", reportDate, autoReviewerCode)
+					reportTime, _ := time.ParseInLocation("2006-01-02", reportDate, time.Local)
+					if err := emailer.SendApprovalReminder(env.EmailFlowApprovalURL, reportTime, name); err != nil {
+						log.Printf("loi gui email nhac Phe duyet cho bao cao %s: %v", reportDate, err)
+					}
+				}
+			}
+		}
+
+		if now.Hour() == ph && now.Minute() == pm && reportDate != lastApproveDate {
+			lastApproveDate = reportDate
+			status, err := currentApprovalStatus(conn, reportDate)
+			if err != nil {
+				log.Printf("loi kiem tra trang thai bao cao %s de tu dong Phe duyet: %v", reportDate, err)
+			} else if status == "reviewed" {
+				name := userFullName(conn, autoApproverCode)
+				if err := autoApprove(conn, reportDate, autoApproverCode, name); err != nil {
+					log.Printf("loi tu dong Phe duyet bao cao %s: %v", reportDate, err)
+				} else {
+					log.Printf("da tu dong Phe duyet bao cao %s (qua han, gan cho %s)", reportDate, autoApproverCode)
+				}
+			}
+		}
+	}
+}
+
+func currentApprovalStatus(conn *sql.DB, reportDate string) (string, error) {
+	var status string
+	err := conn.QueryRow(`SELECT Status FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "draft", nil
+	}
+	return status, err
+}
+
+func userFullName(conn *sql.DB, employeeCode string) string {
+	var name string
+	if err := conn.QueryRow(`SELECT FullName FROM dbo.Users WHERE EmployeeCode = ?`, employeeCode).Scan(&name); err != nil {
+		return employeeCode
+	}
+	return name
+}
+
+func autoReview(conn *sql.DB, reportDate, code, name string) error {
+	_, err := conn.Exec(`
+IF EXISTS (SELECT 1 FROM dbo.ReportApprovals WHERE ReportDate = ?)
+  UPDATE dbo.ReportApprovals SET Status='reviewed', ReviewedBy=?, ReviewedByName=?, ReviewedAt=GETDATE(), UpdatedAt=GETDATE() WHERE ReportDate = ?
+ELSE
+  INSERT INTO dbo.ReportApprovals (ReportDate, Status, ReviewedBy, ReviewedByName, ReviewedAt) VALUES (?, 'reviewed', ?, ?, GETDATE())`,
+		reportDate, code, name, reportDate, reportDate, code, name)
+	return err
+}
+
+func autoApprove(conn *sql.DB, reportDate, code, name string) error {
+	_, err := conn.Exec(`
+UPDATE dbo.ReportApprovals SET Status='approved', ApprovedBy=?, ApprovedByName=?, ApprovedAt=GETDATE(), UpdatedAt=GETDATE()
+WHERE ReportDate = ?`, code, name, reportDate)
+	return err
 }
 
 // parseRunAt reads an optional "?date=YYYY-MM-DD" query param (used by the

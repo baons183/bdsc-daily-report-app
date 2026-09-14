@@ -212,6 +212,25 @@ CREATE TABLE dbo.AppSettings (
   UpdatedBy NVARCHAR(50) NULL,
   UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
+
+-- Review/approval workflow, one row per printed report date. Status is
+-- 'draft' (default, editable normally) -> 'reviewed' (Moderator bấm Kiểm
+-- tra — locks the day's SuCo/GiamSat/CongViec against everyone but Admin)
+-- -> 'approved' (an Approver bấm Phê duyệt, or auto-filled at the
+-- approval deadline if still unapproved). An Approver rejecting sends it
+-- back to 'draft' and clears the reviewer fields.
+IF OBJECT_ID('dbo.ReportApprovals', 'U') IS NULL
+CREATE TABLE dbo.ReportApprovals (
+  ReportDate DATE NOT NULL PRIMARY KEY,
+  Status NVARCHAR(20) NOT NULL DEFAULT 'draft',
+  ReviewedBy NVARCHAR(50) NULL,
+  ReviewedByName NVARCHAR(200) NULL,
+  ReviewedAt DATETIME NULL,
+  ApprovedBy NVARCHAR(50) NULL,
+  ApprovedByName NVARCHAR(200) NULL,
+  ApprovedAt DATETIME NULL,
+  UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
 `
 
 func Migrate(conn *sql.DB) error {

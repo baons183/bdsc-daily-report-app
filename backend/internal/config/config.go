@@ -26,6 +26,10 @@ type Config struct {
 	// folder) — the email body links to <this>/<pdf file name> instead of
 	// relying only on the raw attachment.
 	ReportSharePointURLPrefix string
+	// Separate Flow that emails the 2 Approvers a reminder whenever a
+	// Moderator "Kiểm tra"s a day's report — different recipients/content
+	// than the daily report Flow, so it gets its own webhook.
+	EmailFlowApprovalURL string
 	// Name of the (separate, shared) database holding Asset_Master — the same
 	// equipment master table MaintenanceReportApp/checksheet-app already use
 	// for their own Thiết bị lookups. Same SQL Server instance/login as our
@@ -75,21 +79,22 @@ func getEnv(key, def string) string {
 func Load() Config {
 	loadDotEnv(".env")
 	return Config{
-		Port:             getEnv("PORT", "8090"),
-		DBServer:         getEnv("DB_SERVER", "localhost"),
-		DBDatabase:       getEnv("DB_DATABASE", "BDSC_DailyReport"),
-		DBUsername:       getEnv("DB_USERNAME", ""),
-		DBPassword:       getEnv("DB_PASSWORD", ""),
-		DBPort:           getEnv("DB_PORT", "1433"),
-		JWTSecret:        getEnv("JWT_SECRET_KEY", "change-me-in-.env"),
-		UploadsDir:       getEnv("UPLOADS_DIR", "./uploads"),
-		ReportsDir:       getEnv("REPORTS_DIR", "./generated_reports"),
-		CBMExcelPath:     getEnv("CBM_EXCEL_PATH", ""),
-		EmailFlowURL:     getEnv("EMAIL_FLOW_URL", ""),
+		Port:                      getEnv("PORT", "8090"),
+		DBServer:                  getEnv("DB_SERVER", "localhost"),
+		DBDatabase:                getEnv("DB_DATABASE", "BDSC_DailyReport"),
+		DBUsername:                getEnv("DB_USERNAME", ""),
+		DBPassword:                getEnv("DB_PASSWORD", ""),
+		DBPort:                    getEnv("DB_PORT", "1433"),
+		JWTSecret:                 getEnv("JWT_SECRET_KEY", "change-me-in-.env"),
+		UploadsDir:                getEnv("UPLOADS_DIR", "./uploads"),
+		ReportsDir:                getEnv("REPORTS_DIR", "./generated_reports"),
+		CBMExcelPath:              getEnv("CBM_EXCEL_PATH", ""),
+		EmailFlowURL:              getEnv("EMAIL_FLOW_URL", ""),
 		EmailFlowTestURL:          getEnv("EMAIL_FLOW_TEST_URL", ""),
 		ReportSharePointURLPrefix: getEnv("REPORT_SHAREPOINT_URL_PREFIX", ""),
-		ReportHour:       8,
-		ReportMinute:     0,
-		AssetDBName:      getEnv("ASSET_DB_NAME", "MNT_Report_Mirror"),
+		EmailFlowApprovalURL:      getEnv("EMAIL_FLOW_APPROVAL_URL", ""),
+		ReportHour:                8,
+		ReportMinute:              0,
+		AssetDBName:               getEnv("ASSET_DB_NAME", "MNT_Report_Mirror"),
 	}
 }

@@ -48,3 +48,27 @@ func ReportWindow(runAt time.Time) (start, end time.Time) {
 	start = time.Date(y, m, d, 8, 1, 0, 0, runAt.Location())
 	return
 }
+
+// ReportDateForEntry returns the "printed" report date (report.Generate's
+// reportDate = RunAt-1 convention) that a data row entered at time `t`
+// will end up appearing in once its window's report is generated — used
+// to check whether that specific row's own report has been reviewed/
+// approved (and is therefore locked) regardless of what time it is now.
+func ReportDateForEntry(t time.Time) time.Time {
+	_, end := EntryWindow(t)
+	return end.AddDate(0, 0, -1)
+}
+
+// CurrentReportDate returns the printed report date that is "active" for
+// review/approval right now, at time `t` — the most recently generated
+// daily report: today's (t's date minus 1) if today's 08:00 run has
+// already fired (t is at/after the 08:01 cutoff), otherwise still
+// yesterday's run's report (t's date minus 2), since today's hasn't been
+// generated yet.
+func CurrentReportDate(t time.Time) time.Time {
+	cutoff := time.Date(t.Year(), t.Month(), t.Day(), 8, 1, 0, 0, t.Location())
+	if t.Before(cutoff) {
+		return t.AddDate(0, 0, -2)
+	}
+	return t.AddDate(0, 0, -1)
+}

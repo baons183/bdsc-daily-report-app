@@ -542,6 +542,58 @@ function renderImagesTable(images) {
   return `<table><tr><th>TT</th><th>Nội dung</th><th>Hình ảnh</th></tr>${rows}</table>`;
 }
 
+// Trạng thái Kiểm tra/Phê duyệt hiển thị + nút hành động, dựa trên
+// d.approval (report/view trả về, xem reportapproval.go/reportview.go).
+// Moderator chỉ thấy "Kiểm tra" khi còn draft; Approver chỉ thấy
+// "Phê duyệt"/"Reject" khi đã reviewed — khớp đúng luật phía server.
+function renderApprovalBlock(a) {
+  a = a || { status: "draft", reviewedByName: "", approvedByName: "" };
+  const statusLabel = { draft: "Chưa kiểm tra", reviewed: "Đã kiểm tra, chờ phê duyệt", approved: "Đã phê duyệt" }[a.status] || a.status;
+  const buttons = [];
+  if (a.status === "draft" && hasRole("Moderator")) {
+    buttons.push(`<button class="btn" onclick="doReviewReport()">Kiểm tra</button>`);
+  }
+  if (a.status === "reviewed" && hasRole("Approver")) {
+    buttons.push(`<button class="btn" onclick="doApproveReport()">Phê duyệt</button>`);
+    buttons.push(`<button class="btn" style="background:#a33" onclick="doRejectReport()">Reject</button>`);
+  }
+  return `
+    <div class="rv-heading">Trạng thái Kiểm tra / Phê duyệt</div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+      <span><b>${esc(statusLabel)}</b></span>
+      ${buttons.join("")}
+    </div>
+    <table>
+      <tr><th style="width:50%">NGƯỜI LẬP</th><th style="width:50%">PHÊ DUYỆT</th></tr>
+      <tr><td style="text-align:center">${esc(a.reviewedByName || "")}</td><td style="text-align:center">${esc(a.approvedByName || "")}</td></tr>
+    </table>
+  `;
+}
+async function doReviewReport() {
+  const date = document.getElementById("thongke-date").value;
+  if (!confirm("Xác nhận Kiểm tra báo cáo ngày " + date + "? Sau khi Kiểm tra, dữ liệu ngày này sẽ bị khoá không sửa được nữa (trừ Admin).")) return;
+  try {
+    await api("/api/report-approval/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
+  } catch (e) { alert("Lỗi: " + e.message); return; }
+  loadThongKe();
+}
+async function doApproveReport() {
+  const date = document.getElementById("thongke-date").value;
+  if (!confirm("Xác nhận Phê duyệt báo cáo ngày " + date + "?")) return;
+  try {
+    await api("/api/report-approval/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
+  } catch (e) { alert("Lỗi: " + e.message); return; }
+  loadThongKe();
+}
+async function doRejectReport() {
+  const date = document.getElementById("thongke-date").value;
+  if (!confirm("Reject báo cáo ngày " + date + "? Dữ liệu sẽ mở lại để sửa như ban đầu.")) return;
+  try {
+    await api("/api/report-approval/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
+  } catch (e) { alert("Lỗi: " + e.message); return; }
+  loadThongKe();
+}
+
 function renderReportView(d) {
   const kpiRows = KPI_CATEGORIES.map(c => {
     const e = (d.kpi || []).find(k => k.chiTieu === c.chiTieu) || {};
@@ -587,6 +639,8 @@ function renderReportView(d) {
 
       <div class="rv-heading">7. MỘT SỐ HÌNH ẢNH THỰC HIỆN CÔNG VIỆC TẠI HIỆN TRƯỜNG</div>
       ${renderImagesTable(images)}
+
+      ${renderApprovalBlock(d.approval)}
     </div>
   `;
 }
@@ -703,7 +757,7 @@ document.getElementById("form-user").addEventListener("submit", async e => {
 });
 
 async function loadAdminPanel() {
-  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline()]);
+  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline(), loadApprovalSchedule()]);
 }
 
 // ---- Gửi báo cáo tất cả các ngày (kể cả T7/CN) hay chỉ ngày thường ----
@@ -742,6 +796,25 @@ async function saveReportSchedule() {
   const [hh, mm] = val.split(":").map(Number);
   await api("/api/report-schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reportHour: hh, reportMinute: mm }) });
   alert("Đã lưu. Có tác dụng trong vòng 1 phút.");
+}
+
+// ---- Hạn Kiểm tra / Phê duyệt báo cáo ----
+async function loadApprovalSchedule() {
+  const s = await api("/api/approval-schedule");
+  document.getElementById("kiemTraDeadline").value = `${String(s.kiemTraHour).padStart(2, "0")}:${String(s.kiemTraMinute).padStart(2, "0")}`;
+  document.getElementById("pheDuyetDeadline").value = `${String(s.pheDuyetHour).padStart(2, "0")}:${String(s.pheDuyetMinute).padStart(2, "0")}`;
+}
+async function saveApprovalSchedule() {
+  const kt = document.getElementById("kiemTraDeadline").value;
+  const pd = document.getElementById("pheDuyetDeadline").value;
+  if (!kt || !pd) { alert("Chọn đủ 2 giờ trước đã."); return; }
+  const [kh, km] = kt.split(":").map(Number);
+  const [ph, pm] = pd.split(":").map(Number);
+  await api("/api/approval-schedule", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kiemTraHour: kh, kiemTraMinute: km, pheDuyetHour: ph, pheDuyetMinute: pm })
+  });
+  alert("Đã lưu.");
 }
 
 // ---- Ngày ngoại lệ chạy báo cáo vào Thứ 7/CN ----

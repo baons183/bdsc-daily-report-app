@@ -13,10 +13,11 @@ import (
 )
 
 type Env struct {
-	DB           *sql.DB
-	UploadsDir   string
-	AssetDBName  string
-	CBMExcelPath string
+	DB                   *sql.DB
+	UploadsDir           string
+	AssetDBName          string
+	CBMExcelPath         string
+	EmailFlowApprovalURL string
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -91,4 +92,25 @@ func checkEditOwnership(w http.ResponseWriter, r *http.Request, createdBy string
 	}
 	writeErr(w, 403, "ban khong co quyen sua du lieu cua nguoi khac")
 	return false
+}
+
+// checkNotLocked refuses the request (writing a 423 Locked) unless the
+// caller is Admin, or the report that entryTime's row belongs to
+// (window.ReportDateForEntry) is still in "draft" status. Every
+// Create/Update/Delete handler for SuCo/GiamSat/CongViec calls this — once
+// a report is "reviewed" or "approved", nobody but Admin can touch its
+// data anymore (an Approver rejecting is what reopens it).
+func checkNotLocked(w http.ResponseWriter, r *http.Request, db *sql.DB, entryTime time.Time) bool {
+	claims := currentUser(r)
+	if claims != nil && auth.HasRole(claims.Roles, "Admin") {
+		return true
+	}
+	reportDate := window.ReportDateForEntry(entryTime).Format("2006-01-02")
+	var status string
+	err := db.QueryRow(`SELECT Status FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).Scan(&status)
+	if err == nil && (status == "reviewed" || status == "approved") {
+		writeErr(w, 423, fmt.Sprintf("Báo cáo ngày %s đã được kiểm tra/phê duyệt, không thể sửa dữ liệu — liên hệ Approver để Reject nếu cần chỉnh lại.", reportDate))
+		return false
+	}
+	return true
 }

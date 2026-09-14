@@ -161,8 +161,11 @@ func (b *builder) letterhead(runAt, start, end string) {
 }
 
 // signatureBlock reproduces the "NGƯỜI LẬP / PHÊ DUYỆT" sign-off row at the
-// end of the original Word report.
-func (b *builder) signatureBlock() {
+// end of the original Word report. reviewedByName/approvedByName are the
+// Moderator/Approver who Kiểm tra/Phê duyệt'd this report date (blank if
+// not yet done) — printed below the "(Ký, ghi rõ họ tên)" hint so the PDF
+// carries a name even though there's no real signature image.
+func (b *builder) signatureBlock(reviewedByName, approvedByName string) {
 	pdf := b.pdf
 	if pdf.GetY() > pageBottom-35 {
 		pdf.AddPage()
@@ -175,6 +178,10 @@ func (b *builder) signatureBlock() {
 	pdf.SetFont("Times", "I", 9)
 	pdf.CellFormat(half, 5, "(Ký, ghi rõ họ tên)", "", 0, "C", false, 0, "")
 	pdf.CellFormat(half, 5, "(Ký, ghi rõ họ tên)", "", 1, "C", false, 0, "")
+	pdf.Ln(10)
+	pdf.SetFont("Times", "B", 11)
+	pdf.CellFormat(half, 5, reviewedByName, "", 0, "C", false, 0, "")
+	pdf.CellFormat(half, 5, approvedByName, "", 1, "C", false, 0, "")
 	pdf.SetFont("Times", "", 11)
 }
 
@@ -738,7 +745,7 @@ func Generate(cfg BuildInput) (string, error) {
 	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionImages(cfg.CongViec)
-	b.signatureBlock()
+	b.signatureBlock(cfg.ReviewedByName, cfg.ApprovedByName)
 
 	if err := os.MkdirAll(cfg.OutDir, 0o755); err != nil {
 		return "", err
