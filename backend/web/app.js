@@ -62,6 +62,12 @@ async function api(path, opts = {}) {
   opts.headers = opts.headers || {};
   if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
   const res = await fetch(path, opts);
+  if (res.status === 401) {
+    // Token het han hoac khong hop le - quay lai man hinh dang nhap thay vi
+    // de nguoi dung thay 1 loi chung chung roi ket ket tren trang cu.
+    logout();
+    throw new Error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
+  }
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || res.statusText);
