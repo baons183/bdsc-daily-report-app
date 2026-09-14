@@ -98,30 +98,32 @@ func ReadCBMExcel(path string, start, end time.Time) []models.CBMRow {
 			AlarmLevel:  get(r, iLevel),
 		})
 	}
-	return dedupeByTagnameLatest(out)
+	return dedupeByTagnameEarliest(out)
 }
 
-// dedupeByTagnameLatest collapses repeated alarms sharing the same Tagname
-// AND Description (the monitoring system can log the exact same alarm many
-// times within one window) down to a single row — the most recent one. A
-// single tag with genuinely different alarm descriptions (different
-// measurement points/alarm types) is kept as separate rows.
-func dedupeByTagnameLatest(rows []models.CBMRow) []models.CBMRow {
-	latest := map[string]models.CBMRow{}
+// dedupeByTagnameEarliest collapses repeated alarms sharing the same
+// Tagname AND Description (the monitoring system can log the exact same
+// alarm many times within one window) down to a single row — the earliest
+// one within the report window, i.e. when the alarm first started rather
+// than when it was last still firing. A single tag with genuinely
+// different alarm descriptions (different measurement points/alarm types)
+// is kept as separate rows.
+func dedupeByTagnameEarliest(rows []models.CBMRow) []models.CBMRow {
+	earliest := map[string]models.CBMRow{}
 	order := []string{}
 	keyOf := func(r models.CBMRow) string { return r.Tagname + "|" + r.Description }
 	for _, row := range rows {
 		key := keyOf(row)
-		if existing, ok := latest[key]; !ok || row.DataTime.After(existing.DataTime) {
+		if existing, ok := earliest[key]; !ok || row.DataTime.Before(existing.DataTime) {
 			if !ok {
 				order = append(order, key)
 			}
-			latest[key] = row
+			earliest[key] = row
 		}
 	}
 	out := make([]models.CBMRow, 0, len(order))
 	for _, key := range order {
-		out = append(out, latest[key])
+		out = append(out, earliest[key])
 	}
 	return out
 }
