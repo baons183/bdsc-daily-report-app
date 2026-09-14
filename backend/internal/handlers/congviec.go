@@ -217,7 +217,7 @@ func (e *Env) UpdateCongViec(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
-	if !checkOwnership(w, r, createdBy) {
+	if !checkEditOwnership(w, r, createdBy) {
 		return
 	}
 	if err := r.ParseMultipartForm(50 << 20); err != nil {

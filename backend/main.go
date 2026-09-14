@@ -47,17 +47,17 @@ func main() {
 
 	mux.Handle("GET /api/suco", authMw(http.HandlerFunc(env.ListSuCo)))
 	mux.Handle("POST /api/suco", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.CreateSuCo))))
-	mux.Handle("PUT /api/suco/{id}", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.UpdateSuCo))))
+	mux.Handle("PUT /api/suco/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("SuCo", env.UpdateSuCo))))
 	mux.Handle("DELETE /api/suco/{id}", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.DeleteSuCo))))
 
 	mux.Handle("GET /api/giamsat", authMw(http.HandlerFunc(env.ListGiamSat)))
 	mux.Handle("POST /api/giamsat", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.CreateGiamSat))))
-	mux.Handle("PUT /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.UpdateGiamSat))))
+	mux.Handle("PUT /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.UpdateGiamSat))))
 	mux.Handle("DELETE /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteGiamSat))))
 
 	mux.Handle("GET /api/congviec", authMw(http.HandlerFunc(env.ListCongViec)))
 	mux.Handle("POST /api/congviec", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.CreateCongViec))))
-	mux.Handle("PUT /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.UpdateCongViec))))
+	mux.Handle("PUT /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.UpdateCongViec))))
 	mux.Handle("DELETE /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.DeleteCongViec))))
 
 	mux.Handle("GET /api/kpi", authMw(http.HandlerFunc(env.ListKPI)))
@@ -72,13 +72,22 @@ func main() {
 	mux.Handle("POST /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.AddScheduleOverride))))
 	mux.Handle("DELETE /api/schedule-overrides/{id}", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.DeleteScheduleOverride))))
 
+	mux.Handle("GET /api/report-schedule", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetReportSchedule))))
+	mux.Handle("POST /api/report-schedule", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetReportSchedule))))
+
+	mux.Handle("GET /api/cbm-excel-path", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetCBMExcelPathSetting))))
+	mux.Handle("POST /api/cbm-excel-path", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetCBMExcelPathSetting))))
+
+	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
+	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))
+
 	mux.Handle("POST /api/report/run-now", authMw(http.HandlerFunc(auth.RequireRole("Admin", func(w http.ResponseWriter, r *http.Request) {
 		runAt, err := parseRunAt(r)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, _, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
+		path, _, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -96,7 +105,7 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -132,6 +141,9 @@ func isRunDay(conn *sql.DB, d time.Time) bool {
 	if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
 		return true
 	}
+	if db.GetSetting(conn, "SEND_ALL_DAYS", "false") == "true" {
+		return true
+	}
 	var count int
 	err := conn.QueryRow(`SELECT COUNT(*) FROM dbo.ScheduleOverrides WHERE OverrideDate = ?`, d.Format("2006-01-02")).Scan(&count)
 	if err != nil {
@@ -141,28 +153,41 @@ func isRunDay(conn *sql.DB, d time.Time) bool {
 	return count > 0
 }
 
-// scheduleDailyReport sleeps until the next 08:00 local time on a day that
+// reportTime reads the Admin-configurable auto-run time from
+// dbo.ReportSchedule, falling back to cfg's compiled-in default (8:00) if
+// the row is somehow missing or unreadable.
+func reportTime(conn *sql.DB, cfg config.Config) (hour, minute int) {
+	if err := conn.QueryRow(`SELECT ReportHour, ReportMinute FROM dbo.ReportSchedule WHERE Id = 1`).Scan(&hour, &minute); err != nil {
+		return cfg.ReportHour, cfg.ReportMinute
+	}
+	return hour, minute
+}
+
+// scheduleDailyReport polls every minute for whether "now" matches the
+// Admin-configured report time (dbo.ReportSchedule, default 08:00) on a day
 // isRunDay allows (weekdays, plus any admin-configured weekend exception),
-// generates the report, emails it via the configured Power Automate Flow,
-// then repeats forever. Runs in its own goroutine for the lifetime of the
-// process; a failed run is logged (via report.RunDaily's own
+// generates the report, and emails it via the configured Power Automate
+// Flow — at most once per calendar day. Polling (rather than sleeping until
+// a precomputed time) means a time change made in the Admin panel takes
+// effect within a minute, without needing to restart the app. Runs forever
+// in its own goroutine; a failed run is logged (via report.RunDaily's own
 // dbo.ReportRuns row) but never crashes the loop.
 func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
+	lastRunDate := ""
+	hour, minute := reportTime(conn, cfg)
+	log.Printf("bao cao ngay dang cau hinh chay luc %02d:%02d moi ngay (co the doi trong trang Quan tri)", hour, minute)
 	for {
+		time.Sleep(20 * time.Second)
 		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day(), cfg.ReportHour, cfg.ReportMinute, 0, 0, now.Location())
-		if !next.After(now) {
-			next = next.AddDate(0, 0, 1)
+		hour, minute := reportTime(conn, cfg)
+		today := now.Format("2006-01-02")
+		if now.Hour() != hour || now.Minute() != minute || today == lastRunDate || !isRunDay(conn, now) {
+			continue
 		}
-		for !isRunDay(conn, next) {
-			next = next.AddDate(0, 0, 1)
-		}
-		sleepDur := next.Sub(now)
-		log.Printf("bao cao ngay tiep theo se chay luc %s (con %s)", next.Format("15:04 02/01/2006 (Mon)"), sleepDur)
-		time.Sleep(sleepDur)
+		lastRunDate = today
 
-		runAt := time.Now()
-		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, cfg.CBMExcelPath, cfg.ReportSharePointURLPrefix, runAt)
+		runAt := now
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			log.Printf("loi sinh bao cao ngay: %v", err)
 			continue
@@ -179,22 +204,26 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 	}
 }
 
-// scheduleKPICarryForward sleeps until 5 minutes after each day's report
-// time (every calendar day, weekends included — KPI data entry isn't tied
-// to whether that day's PDF gets generated), then calls
-// carryForwardKPIIfEmpty so a day nobody touches the KPI tab for still
-// starts with yesterday's numbers as a default instead of blank/zero.
-// Runs forever in its own goroutine.
+// scheduleKPICarryForward polls every minute for 5 minutes past the same
+// Admin-configurable report time scheduleDailyReport uses (every calendar
+// day, weekends included — KPI data entry isn't tied to whether that day's
+// PDF gets generated), then calls carryForwardKPIIfEmpty so a day nobody
+// touches the KPI tab for still starts with yesterday's numbers as a
+// default instead of blank/zero. Runs forever in its own goroutine.
 func scheduleKPICarryForward(conn *sql.DB, cfg config.Config) {
+	lastRunDate := ""
 	for {
+		time.Sleep(20 * time.Second)
 		now := time.Now()
-		next := time.Date(now.Year(), now.Month(), now.Day(), cfg.ReportHour, cfg.ReportMinute+5, 0, 0, now.Location())
-		if !next.After(now) {
-			next = next.AddDate(0, 0, 1)
+		hour, minute := reportTime(conn, cfg)
+		target := now.Add(-5 * time.Minute)
+		today := now.Format("2006-01-02")
+		if target.Hour() != hour || target.Minute() != minute || today == lastRunDate {
+			continue
 		}
-		time.Sleep(next.Sub(now))
+		lastRunDate = today
 
-		if err := carryForwardKPIIfEmpty(conn, time.Now()); err != nil {
+		if err := carryForwardKPIIfEmpty(conn, now); err != nil {
 			log.Printf("loi sao chep KPI tu ngay hom truoc: %v", err)
 		}
 	}

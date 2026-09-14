@@ -47,7 +47,7 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		runAt = time.Date(d.Year(), d.Month(), d.Day(), 8, 0, 0, 0, time.Local)
 	}
 
-	data, err := report.GatherData(e.DB, e.UploadsDir, e.CBMExcelPath, runAt)
+	data, err := report.GatherData(e.DB, e.UploadsDir, e.effectiveCBMExcelPath(), runAt)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

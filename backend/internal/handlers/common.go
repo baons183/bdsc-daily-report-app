@@ -61,8 +61,8 @@ func currentUser(r *http.Request) *auth.Claims {
 }
 
 // checkOwnership refuses the request (writing a 403) unless the caller is
-// either an Admin or the original creator of the row. Every edit/delete
-// handler must call this before touching the row.
+// either an Admin or the original creator of the row. Every delete handler
+// must call this before touching the row.
 func checkOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bool {
 	claims := currentUser(r)
 	if claims == nil {
@@ -73,5 +73,22 @@ func checkOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bo
 		return true
 	}
 	writeErr(w, 403, "ban khong co quyen sua/xoa du lieu cua nguoi khac")
+	return false
+}
+
+// checkEditOwnership is checkOwnership plus an allowance for the Moderator
+// role, which may edit anyone's row but must never be able to delete one —
+// checkOwnership (used by every Delete handler) deliberately does not grant
+// Moderator that bypass. Every Update handler calls this one instead.
+func checkEditOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bool {
+	claims := currentUser(r)
+	if claims == nil {
+		writeErr(w, 401, "chua dang nhap")
+		return false
+	}
+	if auth.HasRole(claims.Roles, "Admin") || auth.HasRole(claims.Roles, "Moderator") || claims.EmployeeCode == createdBy {
+		return true
+	}
+	writeErr(w, 403, "ban khong co quyen sua du lieu cua nguoi khac")
 	return false
 }

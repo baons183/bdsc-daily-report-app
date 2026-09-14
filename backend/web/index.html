@@ -25,6 +25,7 @@
   th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; white-space: pre-line; }
   th { background: #f0f2f5; }
   form.entry { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; margin-bottom: 4px; }
+  form.entry[hidden] { display: none; }
   form.entry label { display: flex; flex-direction: column; font-size: 11px; color: #666; }
   form.entry input, form.entry textarea, form.entry select { padding: 5px; font-size: 12.5px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
   form.entry textarea { resize: vertical; height: 54px; box-sizing: border-box; }
@@ -211,13 +212,33 @@
         <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
       </form>
 
-      <h3>Chạy báo cáo vào Thứ 7/CN cụ thể</h3>
-      <p>Mặc định Thứ 7, Chủ nhật không tự động chạy báo cáo. Thêm ngày cụ thể vào đây nếu ngày đó vẫn cần chạy (VD: đi làm bù).</p>
+      <h3>Giờ tự động gửi báo cáo hàng ngày</h3>
+      <p>Mặc định 08:00 mỗi ngày. Đổi giờ ở đây có tác dụng ngay (trong vòng 1 phút), không cần khởi động lại app.</p>
       <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-        <input type="date" id="overrideDate">
-        <button class="btn" style="margin-top:0" onclick="addScheduleOverride()">Thêm ngoại lệ</button>
+        <input type="time" id="reportScheduleTime">
+        <button class="btn" style="margin-top:0" onclick="saveReportSchedule()">Lưu</button>
       </div>
-      <table id="table-overrides"></table>
+
+      <h3>Đường dẫn file Excel giám sát trực tuyến (CBM)</h3>
+      <p>Đổi ở đây có tác dụng ngay, không cần khởi động lại app.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <input type="text" id="cbmExcelPath" style="flex:1; padding:6px;" placeholder="VD: D:\BSR\Ban BDSC - 00. Database\CBM_DATA_LOG.xlsx">
+        <button class="btn" style="margin-top:0" onclick="saveCBMExcelPath()">Lưu</button>
+      </div>
+
+      <h3>Lịch chạy báo cáo Thứ 7/Chủ nhật</h3>
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:normal;">
+        <input type="checkbox" id="sendAllDays" onchange="saveSendAllDays()">
+        Gửi báo cáo tất cả các ngày (kể cả Thứ 7, Chủ nhật)
+      </label>
+      <div id="scheduleExceptionsBlock">
+        <p>Mặc định Thứ 7, Chủ nhật không tự động chạy báo cáo. Thêm ngày cụ thể vào đây nếu ngày đó vẫn cần chạy (VD: đi làm bù).</p>
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+          <input type="date" id="overrideDate">
+          <button class="btn" style="margin-top:0" onclick="addScheduleOverride()">Thêm ngoại lệ</button>
+        </div>
+        <table id="table-overrides"></table>
+      </div>
 
       <h3>Số lũy kế tháng ban đầu (KPI)</h3>
       <p>App mới bắt đầu tính lũy kế tháng từ ngày triển khai — nếu tháng này đã có phát sinh từ trước đó, nhập số đã có sẵn vào đây để cộng dồn cho đúng. Chỉ áp dụng cho tháng hiện tại; sang tháng sau tự động về 0.</p>

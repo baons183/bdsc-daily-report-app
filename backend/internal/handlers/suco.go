@@ -129,7 +129,7 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
-	if !checkOwnership(w, r, createdBy) {
+	if !checkEditOwnership(w, r, createdBy) {
 		return
 	}
 	var in models.SuCo

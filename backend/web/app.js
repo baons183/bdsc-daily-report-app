@@ -17,7 +17,13 @@ let EMPCODE = localStorage.getItem("bdsc_empcode") || "";
 
 // Trả về true nếu người dùng hiện tại được sửa/xóa dòng do `createdBy` tạo
 // (chính chủ hoặc Admin) — khớp đúng luật phía server (checkOwnership).
-function canModify(createdBy) {
+// Sửa: chính chủ, Admin, hoặc Moderator (Moderator sửa được của người khác
+// nhưng không được xóa — khớp đúng luật phía server, xem checkEditOwnership).
+function canEdit(createdBy) {
+  return hasRole("Admin") || hasRole("Moderator") || createdBy === EMPCODE;
+}
+// Xóa: chỉ chính chủ hoặc Admin — khớp checkOwnership phía server.
+function canDelete(createdBy) {
   return hasRole("Admin") || createdBy === EMPCODE;
 }
 
@@ -137,9 +143,9 @@ function showApp() {
 }
 
 const TAB_DEFS = [
-  { id: "kpi", label: "KPI - Sự cố", role: ["KPI", "SuCo"] },
-  { id: "giamsat", label: "Giám sát/Chẩn đoán", role: "GiamSat" },
-  { id: "congviec", label: "Công việc", role: "CongViec" },
+  { id: "kpi", label: "KPI - Sự cố", role: ["KPI", "SuCo", "Moderator"] },
+  { id: "giamsat", label: "Giám sát/Chẩn đoán", role: ["GiamSat", "Moderator"] },
+  { id: "congviec", label: "Công việc", role: ["CongViec", "Moderator"] },
   { id: "cbm", label: "Giám sát trực tuyến", role: null },
   { id: "thongke", label: "Thống kê", role: null },
   { id: "admin", label: "Quản trị", role: "Admin" },
@@ -181,9 +187,14 @@ const ROWS_CACHE = { suco: {}, giamsat: {}, congviec: {} };
 // Ô Sửa/Xóa chỉ hiện nếu chính chủ tạo dòng đó hoặc là Admin — khớp luật
 // checkOwnership phía server (server vẫn chặn lại nếu cố tình gọi API thẳng).
 function actionButtons(kind, r) {
-  if (!canModify(r.createdBy)) return "";
-  return `<button class="btn" style="margin-top:0" onclick="edit${kind}(${r.id})">Sửa</button> ` +
-    `<button class="btn danger" onclick="delRow('${kind.toLowerCase()}', ${r.id})">Xóa</button>`;
+  let html = "";
+  if (canEdit(r.createdBy)) {
+    html += `<button class="btn" style="margin-top:0" onclick="edit${kind}(${r.id})">Sửa</button> `;
+  }
+  if (canDelete(r.createdBy)) {
+    html += `<button class="btn danger" onclick="delRow('${kind.toLowerCase()}', ${r.id})">Xóa</button>`;
+  }
+  return html;
 }
 
 function enterEditMode(form, id, values, submitLabel) {
@@ -217,6 +228,8 @@ function exitEditMode(form) {
 
 // ---- Sự cố ----
 async function loadSuCo() {
+  // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
+  document.getElementById("form-suco").hidden = !hasRole("SuCo");
   const rows = (await api("/api/suco")) || [];
   ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-suco");
@@ -259,6 +272,8 @@ document.getElementById("form-suco").addEventListener("submit", async e => {
 
 // ---- Giám sát ----
 async function loadGiamSat() {
+  // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
+  document.getElementById("form-giamsat").hidden = !hasRole("GiamSat");
   const rows = (await api("/api/giamsat")) || [];
   ROWS_CACHE.giamsat = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-giamsat");
@@ -297,6 +312,8 @@ document.getElementById("form-giamsat").addEventListener("submit", async e => {
 
 // ---- Công việc (multipart, có ảnh) ----
 async function loadCongViec() {
+  // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
+  document.getElementById("form-congviec").hidden = !hasRole("CongViec");
   const rows = (await api("/api/congviec")) || [];
   ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-congviec");
@@ -465,11 +482,12 @@ function renderReportView(d) {
 
 // ---- KPI - Sự cố (trang gộp) ----
 async function loadKPISuCoPanel() {
+  const canSeeSuCo = hasRole("SuCo") || hasRole("Moderator");
   document.getElementById("kpi-block").hidden = !hasRole("KPI");
-  document.getElementById("suco-block").hidden = !hasRole("SuCo");
+  document.getElementById("suco-block").hidden = !canSeeSuCo;
   const tasks = [];
   if (hasRole("KPI")) tasks.push(loadKPI());
-  if (hasRole("SuCo")) tasks.push(loadSuCo());
+  if (canSeeSuCo) tasks.push(loadSuCo());
   await Promise.all(tasks);
 }
 
@@ -574,7 +592,45 @@ document.getElementById("form-user").addEventListener("submit", async e => {
 });
 
 async function loadAdminPanel() {
-  await Promise.all([loadScheduleOverrides(), loadKPIBaseline()]);
+  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline()]);
+}
+
+// ---- Gửi báo cáo tất cả các ngày (kể cả T7/CN) hay chỉ ngày thường ----
+async function loadSendAllDays() {
+  const s = await api("/api/send-all-days");
+  document.getElementById("sendAllDays").checked = s.sendAllDays;
+  document.getElementById("scheduleExceptionsBlock").hidden = s.sendAllDays;
+}
+async function saveSendAllDays() {
+  const sendAllDays = document.getElementById("sendAllDays").checked;
+  document.getElementById("scheduleExceptionsBlock").hidden = sendAllDays;
+  await api("/api/send-all-days", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sendAllDays }) });
+}
+
+// ---- Đường dẫn file Excel CBM ----
+async function loadCBMExcelPath() {
+  const s = await api("/api/cbm-excel-path");
+  document.getElementById("cbmExcelPath").value = s.cbmExcelPath || "";
+}
+async function saveCBMExcelPath() {
+  const cbmExcelPath = document.getElementById("cbmExcelPath").value;
+  await api("/api/cbm-excel-path", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cbmExcelPath }) });
+  alert("Đã lưu.");
+}
+
+// ---- Giờ tự động gửi báo cáo hàng ngày ----
+async function loadReportSchedule() {
+  const s = await api("/api/report-schedule");
+  const hh = String(s.reportHour).padStart(2, "0");
+  const mm = String(s.reportMinute).padStart(2, "0");
+  document.getElementById("reportScheduleTime").value = `${hh}:${mm}`;
+}
+async function saveReportSchedule() {
+  const val = document.getElementById("reportScheduleTime").value;
+  if (!val) { alert("Chọn giờ trước đã."); return; }
+  const [hh, mm] = val.split(":").map(Number);
+  await api("/api/report-schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reportHour: hh, reportMinute: mm }) });
+  alert("Đã lưu. Có tác dụng trong vòng 1 phút.");
 }
 
 // ---- Ngày ngoại lệ chạy báo cáo vào Thứ 7/CN ----

@@ -105,3 +105,18 @@ func RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
+
+// RequireEditRole is RequireRole plus the Moderator role — used only on
+// "edit" (PUT) routes. Moderator can fix anyone's Sự cố/Giám sát/Công việc
+// data but must never be able to delete it, so DELETE routes deliberately
+// keep using plain RequireRole (which Moderator doesn't hold) instead.
+func RequireEditRole(role string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := FromContext(r.Context())
+		if claims == nil || !(HasRole(claims.Roles, role) || HasRole(claims.Roles, "Moderator")) {
+			http.Error(w, "khong co quyen truy cap muc nay", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}

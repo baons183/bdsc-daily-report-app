@@ -186,6 +186,32 @@ CREATE TABLE dbo.KPIBaseline (
   CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
   CONSTRAINT UQ_KPIBaseline UNIQUE (ChiTieu, YearMonth)
 );
+
+-- Single-row setting for the daily report's auto-run time (default
+-- 08:00), editable by an Admin so this can change without editing .env or
+-- restarting the app. Id is always 1 — there is only ever one row.
+IF OBJECT_ID('dbo.ReportSchedule', 'U') IS NULL
+CREATE TABLE dbo.ReportSchedule (
+  Id INT NOT NULL PRIMARY KEY CHECK (Id = 1),
+  ReportHour INT NOT NULL DEFAULT 8,
+  ReportMinute INT NOT NULL DEFAULT 0,
+  UpdatedBy NVARCHAR(50) NULL,
+  UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+IF NOT EXISTS (SELECT 1 FROM dbo.ReportSchedule WHERE Id = 1)
+INSERT INTO dbo.ReportSchedule (Id, ReportHour, ReportMinute) VALUES (1, 8, 0);
+
+-- Generic key/value store for non-secret settings an Admin can change from
+-- the web UI without editing .env or restarting the app (e.g.
+-- CBM_EXCEL_PATH). A key with no row here just means "use the .env
+-- default" — see db.GetSetting.
+IF OBJECT_ID('dbo.AppSettings', 'U') IS NULL
+CREATE TABLE dbo.AppSettings (
+  SettingKey NVARCHAR(100) NOT NULL PRIMARY KEY,
+  SettingValue NVARCHAR(MAX) NULL,
+  UpdatedBy NVARCHAR(50) NULL,
+  UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
 `
 
 func Migrate(conn *sql.DB) error {

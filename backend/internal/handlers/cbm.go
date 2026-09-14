@@ -25,7 +25,7 @@ func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 		runAt = time.Date(d.Year(), d.Month(), d.Day(), 8, 0, 0, 0, time.Local)
 	}
 	start, end := window.ReportWindow(runAt)
-	rows := report.ReadCBMExcel(e.CBMExcelPath, start, end)
+	rows := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
 	if rows == nil {
 		rows = []models.CBMRow{}
 	}
