@@ -30,6 +30,10 @@ type Config struct {
 	// Moderator "Kiểm tra"s a day's report — different recipients/content
 	// than the daily report Flow, so it gets its own webhook.
 	EmailFlowApprovalURL string
+	// Base URL Approvers use to open the app from the reminder email/Teams
+	// message (e.g. http://10.x.x.x:8090) — blank omits the link instead of
+	// printing a broken one.
+	AppBaseURL string
 	// Name of the (separate, shared) database holding Asset_Master — the same
 	// equipment master table MaintenanceReportApp/checksheet-app already use
 	// for their own Thiết bị lookups. Same SQL Server instance/login as our
@@ -93,6 +97,7 @@ func Load() Config {
 		EmailFlowTestURL:          getEnv("EMAIL_FLOW_TEST_URL", ""),
 		ReportSharePointURLPrefix: getEnv("REPORT_SHAREPOINT_URL_PREFIX", ""),
 		EmailFlowApprovalURL:      getEnv("EMAIL_FLOW_APPROVAL_URL", ""),
+		AppBaseURL:                getEnv("APP_BASE_URL", ""),
 		ReportHour:                8,
 		ReportMinute:              0,
 		AssetDBName:               getEnv("ASSET_DB_NAME", "MNT_Report_Mirror"),

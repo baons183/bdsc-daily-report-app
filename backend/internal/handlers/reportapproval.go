@@ -96,7 +96,7 @@ func (e *Env) ReviewReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reportDate, _ := time.Parse("2006-01-02", in.Date)
-	if err := emailer.SendApprovalReminder(e.EmailFlowApprovalURL, reportDate, name); err != nil {
+	if err := emailer.SendApprovalReminder(e.EmailFlowApprovalURL, reportDate, name, e.AppBaseURL); err != nil {
 		// Da luu trang thai thanh cong - loi gui email khong nen chan
 		// nguoi dung, chi ghi nhan trong response de ho biet.
 		writeJSON(w, 200, map[string]string{"ok": "true", "emailError": err.Error()})

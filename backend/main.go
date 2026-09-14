@@ -30,7 +30,7 @@ func main() {
 	}
 	log.Printf("da ket noi database %s/%s", cfg.DBServer, cfg.DBDatabase)
 
-	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL}
+	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL, AppBaseURL: cfg.AppBaseURL}
 
 	mux := http.NewServeMux()
 
@@ -300,7 +300,7 @@ func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 				} else {
 					log.Printf("da tu dong Kiem tra bao cao %s (qua han, gan cho %s)", reportDate, autoReviewerCode)
 					reportTime, _ := time.ParseInLocation("2006-01-02", reportDate, time.Local)
-					if err := emailer.SendApprovalReminder(env.EmailFlowApprovalURL, reportTime, name); err != nil {
+					if err := emailer.SendApprovalReminder(env.EmailFlowApprovalURL, reportTime, name, env.AppBaseURL); err != nil {
 						log.Printf("loi gui email nhac Phe duyet cho bao cao %s: %v", reportDate, err)
 					}
 				}

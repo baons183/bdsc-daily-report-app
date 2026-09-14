@@ -43,19 +43,26 @@ type approvalPayload struct {
 
 // SendApprovalReminder notifies the Approvers that reportDate's report has
 // just been "Kiểm tra"'d by reviewedByName and is now awaiting their
-// Phê duyệt. A blank flowURL is treated as "email disabled".
-func SendApprovalReminder(flowURL string, reportDate time.Time, reviewedByName string) error {
+// Phê duyệt. A blank flowURL is treated as "email disabled". appURL is the
+// base URL Approvers use to open the app (config.AppBaseURL) — a blank
+// value just omits the link line instead of printing a dead one.
+func SendApprovalReminder(flowURL string, reportDate time.Time, reviewedByName, appURL string) error {
 	if flowURL == "" {
 		return nil
 	}
 	dateStr := reportDate.Format("02/01/2006")
+	linkLine := ""
+	if appURL != "" {
+		linkLine = fmt.Sprintf(`<p><a href="%s">Mở app để Phê duyệt / Reject</a></p>`, appURL)
+	}
 	body := fmt.Sprintf(
 		`<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;">`+
 			`<p>Kính gửi Approver,</p>`+
 			`<p>Báo cáo ngày <b>%s</b> đã được <b>%s</b> kiểm tra, cần Phê duyệt (chỉ cần 1 trong 2 Approver phê duyệt là đủ).</p>`+
+			`%s`+
 			`<p>Vui lòng đăng nhập vào app để Phê duyệt hoặc Reject nếu cần chỉnh sửa lại.</p>`+
 			`</div>`,
-		dateStr, reviewedByName)
+		dateStr, reviewedByName, linkLine)
 	return postJSON(flowURL, approvalPayload{ReportDate: dateStr, ReviewedBy: reviewedByName, EmailBodyHTML: body})
 }
 
