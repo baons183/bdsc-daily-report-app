@@ -71,6 +71,25 @@
     <input id="loginPw" type="password" placeholder="Mật khẩu">
     <div id="loginErr"></div>
     <button class="btn" style="width:100%" onclick="doLogin()">Đăng nhập</button>
+    <div style="text-align:center; margin-top:10px; font-size:13px">
+      Chưa có tài khoản? <a href="#" onclick="openRegister(); return false;">Đăng ký</a>
+    </div>
+  </div>
+</div>
+
+<div id="registerModal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <h3>Đăng ký tài khoản</h3>
+    <p style="font-size:13px; color:#555; margin-top:-6px">Tài khoản đăng ký ở đây chỉ xem được tab Thống kê và Báo cáo tuần. Cần thêm quyền nhập liệu thì liên hệ Admin.</p>
+    <input id="regCode" placeholder="Mã nhân viên">
+    <input id="regName" placeholder="Họ tên">
+    <input id="regPw" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)">
+    <input id="regPw2" type="password" placeholder="Nhập lại mật khẩu">
+    <div class="modal-err" id="regErr"></div>
+    <div class="modal-actions">
+      <button class="btn" style="margin-top:0; background:#888" onclick="closeRegister()">Hủy</button>
+      <button class="btn" style="margin-top:0" onclick="submitRegister()">Đăng ký</button>
+    </div>
   </div>
 </div>
 
@@ -155,7 +174,6 @@
     </section>
 
     <section id="panel-weekly" class="panel">
-      <p>Tổng hợp Sự cố và 2 phần Giám sát (trực tuyến + chẩn đoán) trong 1 khoảng thời gian bất kỳ — dùng cho báo cáo tuần về độ tin cậy thiết bị.</p>
       <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <label>Từ ngày: <input type="date" id="weekly-start"></label>
         <label>Đến ngày: <input type="date" id="weekly-end"></label>
@@ -218,7 +236,7 @@
         <label>Mã nhân viên<input name="employeeCode" required></label>
         <label>Họ tên<input name="fullName"></label>
         <label>Mật khẩu<input name="password" type="password" required></label>
-        <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin,Moderator,Approver)<input name="roles"></label>
+        <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin,Moderator,Approver,Viewer)<input name="roles"></label>
         <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
       </form>
 

@@ -78,6 +78,50 @@ func (e *Env) BootstrapFirstAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, map[string]bool{"ok": true})
 }
 
+type registerReq struct {
+	EmployeeCode string `json:"employeeCode"`
+	Password     string `json:"password"`
+	FullName     string `json:"fullName"`
+}
+
+// RegisterViewer lets anyone create their own account without an Admin —
+// always hard-codes the Viewer role (read-only: Thống kê + Báo cáo tuần
+// tabs only) regardless of what the client sends, so self-registration can
+// never grant edit/admin rights. An Admin can add more roles afterwards
+// from the Quản trị tab if the person actually needs them.
+func (e *Env) RegisterViewer(w http.ResponseWriter, r *http.Request) {
+	var in registerReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.EmployeeCode == "" || in.Password == "" {
+		writeErr(w, 400, "thieu ma nhan vien/mat khau")
+		return
+	}
+	if len(in.Password) < 6 {
+		writeErr(w, 400, "mat khau phai co it nhat 6 ky tu")
+		return
+	}
+	var count int
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM dbo.Users WHERE EmployeeCode = ?`, in.EmployeeCode).Scan(&count); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if count > 0 {
+		writeErr(w, 409, "ma nhan vien nay da co tai khoan, vui long dang nhap hoac lien he Admin neu quen mat khau")
+		return
+	}
+	hash, err := auth.HashPassword(in.Password)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(),
+		`INSERT INTO dbo.Users (EmployeeCode, FullName, PasswordHash, Roles) VALUES (?, ?, ?, 'Viewer')`,
+		in.EmployeeCode, in.FullName, hash); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 201, map[string]bool{"ok": true})
+}
+
 type changePasswordReq struct {
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword"`

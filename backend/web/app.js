@@ -103,6 +103,41 @@ function logout() {
   location.reload();
 }
 
+function openRegister() {
+  document.getElementById("regCode").value = "";
+  document.getElementById("regName").value = "";
+  document.getElementById("regPw").value = "";
+  document.getElementById("regPw2").value = "";
+  document.getElementById("regErr").textContent = "";
+  document.getElementById("registerModal").hidden = false;
+}
+function closeRegister() {
+  document.getElementById("registerModal").hidden = true;
+}
+async function submitRegister() {
+  const employeeCode = document.getElementById("regCode").value.trim();
+  const fullName = document.getElementById("regName").value.trim();
+  const password = document.getElementById("regPw").value;
+  const password2 = document.getElementById("regPw2").value;
+  const errBox = document.getElementById("regErr");
+  errBox.textContent = "";
+  if (!employeeCode || !password) { errBox.textContent = "Vui lòng nhập đủ Mã nhân viên/Mật khẩu."; return; }
+  if (password !== password2) { errBox.textContent = "Mật khẩu nhập lại không khớp."; return; }
+  try {
+    await api("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeCode, password, fullName }),
+    });
+  } catch (e) {
+    errBox.textContent = "Lỗi: " + e.message;
+    return;
+  }
+  closeRegister();
+  alert("Đăng ký thành công. Vui lòng đăng nhập.");
+  document.getElementById("loginCode").value = employeeCode;
+}
+
 function openChangePassword() {
   document.getElementById("cpOld").value = "";
   document.getElementById("cpNew").value = "";
@@ -158,12 +193,24 @@ const TAB_DEFS = [
   { id: "admin", label: "Quản trị", role: "Admin" },
 ];
 
+// Tài khoản tự đăng ký chỉ có duy nhất role "Viewer" - chỉ được xem 2 tab
+// nay, du cac tab khac (VD Giam sat truc tuyen) co role: null (nghia la
+// "ai dang nhap cung xem duoc") vi cac role thao tac (SuCo, GiamSat...) van
+// dung role: null cho CBM voi y dinh "ai cung xem duoc", rieng Viewer thi
+// khong.
+const VIEWER_ONLY_TABS = ["thongke", "weekly"];
+function isViewerOnly() {
+  const roles = ROLES.split(",").map(s => s.trim()).filter(Boolean);
+  return roles.length > 0 && roles.every(r => r === "Viewer");
+}
+
 function buildTabs() {
   const nav = document.getElementById("tabs");
   nav.innerHTML = "";
   let first = null;
   TAB_DEFS.forEach(t => {
     if (t.role && !(Array.isArray(t.role) ? hasAnyRole(t.role) : hasRole(t.role))) return;
+    if (isViewerOnly() && !VIEWER_ONLY_TABS.includes(t.id)) return;
     if (!first) first = t.id;
     const btn = document.createElement("button");
     btn.textContent = t.label;

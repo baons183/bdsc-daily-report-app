@@ -37,6 +37,7 @@ func main() {
 	// public
 	mux.HandleFunc("POST /api/login", env.Login(cfg.JWTSecret))
 	mux.HandleFunc("POST /api/setup/first-admin", env.BootstrapFirstAdmin)
+	mux.HandleFunc("POST /api/register", env.RegisterViewer)
 
 	// authenticated
 	authMw := auth.Middleware(cfg.JWTSecret)
