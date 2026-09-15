@@ -23,6 +23,7 @@ type reportViewResponse struct {
 	GiamSat  []models.GiamSat   `json:"giamSat"`
 	CongViec []models.CongViec  `json:"congViec"`
 	CBM      []models.CBMRow    `json:"cbm"`
+	RSM      []models.RSMRow    `json:"rsm"`
 	DeXuat   []report.NoteItem  `json:"deXuat"`
 	LuuY     []report.NoteItem  `json:"luuY"`
 	Images   []reportImage      `json:"images"`
@@ -49,7 +50,7 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		runAt = time.Date(d.Year(), d.Month(), d.Day(), 8, 0, 0, 0, time.Local)
 	}
 
-	data, err := report.GatherData(e.DB, e.UploadsDir, e.effectiveCBMExcelPath(), runAt)
+	data, err := report.GatherData(e.DB, e.UploadsDir, e.effectiveCBMExcelPath(), e.effectiveRSMPdfFolder(), runAt)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -84,6 +85,7 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		GiamSat:  data.GiamSat,
 		CongViec: data.CongViec,
 		CBM:      data.CBM,
+		RSM:      data.RSM,
 		DeXuat:   report.CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec),
 		LuuY:     report.CombineLuuY(data.SuCo, data.GiamSat, data.CongViec),
 		Images:   images,

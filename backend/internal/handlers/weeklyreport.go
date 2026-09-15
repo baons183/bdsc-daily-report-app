@@ -15,6 +15,7 @@ type weeklyReportResp struct {
 	SuCoSummary map[string]int    `json:"sucoSummary"`
 	GiamSat     []models.GiamSat  `json:"giamsat"`
 	CBM         []models.CBMRow   `json:"cbm"`
+	RSM         []models.RSMRow   `json:"rsm"`
 	CongViec    []models.CongViec `json:"congviec"`
 	Images      []reportImage     `json:"images"`
 	DeXuat      []report.NoteItem `json:"deXuat"`
@@ -74,6 +75,10 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	if cbm == nil {
 		cbm = []models.CBMRow{}
 	}
+	rsmRows, err := report.FetchRSMSection(e.DB, e.effectiveRSMPdfFolder(), start, end)
+	if err != nil {
+		rsmRows = []models.RSMRow{}
+	}
 	congviecAll, err := report.FetchCongViec(ctx, e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -121,6 +126,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		SuCoSummary: summary,
 		GiamSat:     giamsat,
 		CBM:         cbm,
+		RSM:         rsmRows,
 		CongViec:    congviecLatest,
 		Images:      images,
 		DeXuat:      report.CombineDeXuat(suco, giamsat, congviecLatest),

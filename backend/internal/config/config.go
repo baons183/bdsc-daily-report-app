@@ -39,7 +39,13 @@ type Config struct {
 	// for their own Thiết bị lookups. Same SQL Server instance/login as our
 	// own DB, so a cross-database query (DBNAME.dbo.Asset_Master) is enough;
 	// no second connection needed.
-	AssetDBName  string
+	AssetDBName string
+	// Folder BSR's external RSM shift-handover system drops its daily
+	// "RSM-Night-Shift-Report-on-DD-MM-YYYY.pdf" export into — section
+	// IV.2 of that PDF is filtered to Ban BDSC's own departments and
+	// rendered as report section 3.3 (see internal/rsm). Blank disables
+	// the feature entirely.
+	RSMPdfFolder string
 	ReportHour   int
 	ReportMinute int
 }
@@ -98,6 +104,7 @@ func Load() Config {
 		ReportSharePointURLPrefix: getEnv("REPORT_SHAREPOINT_URL_PREFIX", ""),
 		EmailFlowApprovalURL:      getEnv("EMAIL_FLOW_APPROVAL_URL", ""),
 		AppBaseURL:                getEnv("APP_BASE_URL", ""),
+		RSMPdfFolder:              getEnv("RSM_PDF_FOLDER", ""),
 		ReportHour:                8,
 		ReportMinute:              0,
 		AssetDBName:               getEnv("ASSET_DB_NAME", "MNT_Report_Mirror"),

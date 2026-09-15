@@ -24,6 +24,7 @@ type BuildInput struct {
 	GiamSat    []models.GiamSat
 	CongViec   []models.CongViec
 	CBM        []models.CBMRow
+	RSM        []models.RSMRow
 	UploadsDir string
 	OutDir     string
 	// Names to print in the PDF's "NGƯỜI LẬP"/"PHÊ DUYỆT" signature boxes —
@@ -41,7 +42,7 @@ type BuildInput struct {
 // GatherData collects everything a report for `runAt`'s window needs,
 // without rendering or writing anything — shared by RunDaily (PDF) and the
 // web "Thống kê" tab (HTML view of the same data).
-func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (BuildInput, error) {
+func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt time.Time) (BuildInput, error) {
 	ctx := context.Background()
 	rh, rm := appdb.ReportTime(db, 8, 0)
 	start, end := window.ReportWindow(runAt, rh, rm)
@@ -67,14 +68,20 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 		cbm = FilterCBMExcluded(cbm, excluded)
 	}
 
-	reportDate := runAt.AddDate(0, 0, -1).Format("2006-01-02")
+	reportDateT := runAt.AddDate(0, 0, -1)
+	reportDate := reportDateT.Format("2006-01-02")
 	var reviewedByName, approvedByName sql.NullString
 	db.QueryRowContext(ctx, `SELECT ReviewedByName, ApprovedByName FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
 		Scan(&reviewedByName, &approvedByName)
 
+	rsmRows, err := FetchRSMSection(db, rsmPdfFolder, reportDateT, reportDateT)
+	if err != nil {
+		rsmRows = nil
+	}
+
 	return BuildInput{
 		RunAt: runAt, Start: start, End: end,
-		KPI: kpi, SuCo: suco, GiamSat: giamsat, CongViec: congviec, CBM: cbm,
+		KPI: kpi, SuCo: suco, GiamSat: giamsat, CongViec: congviec, CBM: cbm, RSM: rsmRows,
 		UploadsDir:     uploadsDir,
 		ReviewedByName: reviewedByName.String,
 		ApprovedByName: approvedByName.String,
@@ -89,8 +96,8 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 // link pointing at sharePointURLPrefix + the generated file's name — the
 // SharePoint-synced copy of outDir, so the link resolves once sync catches
 // up (may lag a little behind the file actually landing on disk).
-func RunDaily(db *sql.DB, uploadsDir, outDir, cbmExcelPath, sharePointURLPrefix string, runAt time.Time) (pdfPath, emailHTML string, err error) {
-	data, err := GatherData(db, uploadsDir, cbmExcelPath, runAt)
+func RunDaily(db *sql.DB, uploadsDir, outDir, cbmExcelPath, rsmPdfFolder, sharePointURLPrefix string, runAt time.Time) (pdfPath, emailHTML string, err error) {
+	data, err := GatherData(db, uploadsDir, cbmExcelPath, rsmPdfFolder, runAt)
 	if err != nil {
 		logRun(db, runAt, "", "FAILED", err.Error())
 		return "", "", err

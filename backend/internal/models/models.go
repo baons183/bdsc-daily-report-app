@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type User struct {
 	Id           int
@@ -103,4 +106,34 @@ type CBMRow struct {
 // build the exact same string without importing each other.
 func CBMExclusionKey(tagname, description string, dataTime time.Time) string {
 	return tagname + "|" + description + "|" + dataTime.Format("2006-01-02 15:04:05")
+}
+
+// RSMRow is one row of section IV.2 (MECHANICAL INTEGRITY/EQUIPMENT
+// RELIABILITY) of BSR's daily RSM Night Shift Report PDF, filtered down to
+// Ban BDSC's own departments — rendered as report section "3.3. Vấn đề
+// khác liên quan tới độ tin cậy và toàn vẹn thiết bị".
+type RSMRow struct {
+	Depart         string `json:"depart"`
+	TagName        string `json:"tagName"`
+	Issue          string `json:"issue"`
+	MitigationPlan string `json:"mitigationPlan"`
+	ActionBy       string `json:"actionBy"`
+	DueDate        string `json:"dueDate"` // YYYY-MM-DD, or "" if the PDF's date didn't parse
+	Status         string `json:"status"`
+	// Included is only meaningful on the review/toggle listing (handlers.
+	// GetRSMReview) — always true on report-facing data (report.
+	// FetchRSMSection already dropped anything excluded).
+	Included bool `json:"included"`
+}
+
+// RSMIssueKey identifies one IV.2 issue by its (Tag name, Issue) pair —
+// the same problem is typically reported day after day until resolved,
+// with only its Mitigation plan/Status narrative changing, so keying on
+// these 2 fields (rather than including the report date) lets a user's
+// "đưa vào báo cáo" tick/untick for one issue carry forward automatically
+// across every day it keeps appearing, and keeps working unchanged
+// whenever the data source switches from this PDF to a future data lake
+// feed, since it depends only on the issue's own content.
+func RSMIssueKey(tagName, issue string) string {
+	return strings.TrimSpace(tagName) + "|" + strings.TrimSpace(issue)
 }

@@ -131,7 +131,17 @@
         <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
+
       <div style="overflow-x:auto"><table id="table-giamsat"></table></div>
+    </section>
+
+    <section id="panel-rsm" class="panel">
+      <p>Mục 3.3 báo cáo — tự động lấy từ file RSM Night Shift Report (PDF), lọc theo các phòng/nhóm kỹ thuật của Ban BDSC. Bỏ tick "Đưa vào báo cáo" nếu vấn đề này không cần đưa vào báo cáo (áp dụng cho mọi ngày sau còn xuất hiện vấn đề này, tới khi xử lý xong).</p>
+      <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label>Chọn ngày: <input type="date" id="rsm-date"></label>
+        <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
+      </div>
+      <div style="overflow-x:auto"><table id="table-rsm"></table></div>
     </section>
 
     <section id="panel-congviec" class="panel">
@@ -252,6 +262,13 @@
       <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
         <input type="text" id="cbmExcelPath" style="flex:1; padding:6px;" placeholder="VD: D:\BSR\Ban BDSC - 00. Database\CBM_DATA_LOG.xlsx">
         <button class="btn" style="margin-top:0" onclick="saveCBMExcelPath()">Lưu</button>
+      </div>
+
+      <h3>Thư mục file RSM Night Shift Report (PDF)</h3>
+      <p>App tự tìm file "RSM-Night-Shift-Report-on-DD-MM-YYYY.pdf" trong thư mục này theo ngày báo cáo. Đổi ở đây có tác dụng ngay, không cần khởi động lại app.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <input type="text" id="rsmPdfFolder" style="flex:1; padding:6px;" placeholder="VD: D:\BSR\Ban BDSC - 00. Database\RSM Reports">
+        <button class="btn" style="margin-top:0" onclick="saveRSMPdfFolder()">Lưu</button>
       </div>
 
       <h3>Lịch chạy báo cáo Thứ 7/Chủ nhật</h3>

@@ -30,7 +30,7 @@ func main() {
 	}
 	log.Printf("da ket noi database %s/%s", cfg.DBServer, cfg.DBDatabase)
 
-	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL, AppBaseURL: cfg.AppBaseURL}
+	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL, AppBaseURL: cfg.AppBaseURL, RSMPdfFolder: cfg.RSMPdfFolder}
 
 	mux := http.NewServeMux()
 
@@ -81,6 +81,11 @@ func main() {
 	mux.Handle("GET /api/cbm-excel-path", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetCBMExcelPathSetting))))
 	mux.Handle("POST /api/cbm-excel-path", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetCBMExcelPathSetting))))
 
+	mux.Handle("GET /api/rsm-pdf-folder", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetRSMPdfFolderSetting))))
+	mux.Handle("POST /api/rsm-pdf-folder", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetRSMPdfFolderSetting))))
+	mux.Handle("GET /api/rsm-review", authMw(http.HandlerFunc(env.GetRSMReview)))
+	mux.Handle("POST /api/rsm-exclude", authMw(http.HandlerFunc(env.SetRSMSectionExclusion)))
+
 	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
 	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))
 
@@ -98,7 +103,7 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, _, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
+		path, _, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), db.GetSetting(conn, "RSM_PDF_FOLDER", cfg.RSMPdfFolder), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -116,7 +121,7 @@ func main() {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), db.GetSetting(conn, "RSM_PDF_FOLDER", cfg.RSMPdfFolder), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -199,7 +204,7 @@ func scheduleDailyReport(conn *sql.DB, cfg config.Config) {
 		lastRunDate = today
 
 		runAt := now
-		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), cfg.ReportSharePointURLPrefix, runAt)
+		path, emailHTML, err := report.RunDaily(conn, cfg.UploadsDir, cfg.ReportsDir, db.GetSetting(conn, "CBM_EXCEL_PATH", cfg.CBMExcelPath), db.GetSetting(conn, "RSM_PDF_FOLDER", cfg.RSMPdfFolder), cfg.ReportSharePointURLPrefix, runAt)
 		if err != nil {
 			log.Printf("loi sinh bao cao ngay: %v", err)
 			continue

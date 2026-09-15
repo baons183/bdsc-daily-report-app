@@ -247,6 +247,20 @@ CREATE TABLE dbo.CBMExclusions (
   ExcludedBy NVARCHAR(50) NULL,
   ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
+
+-- IV.2 issues (report section "3.3. Vấn đề khác liên quan tới độ tin cậy
+-- và toàn vẹn thiết bị") a user has unticked "đưa vào báo cáo" for —
+-- identified by (TagName, Issue), the same pair models.RSMIssueKey uses,
+-- so the same open issue stays excluded every day it keeps reappearing in
+-- the RSM PDF until the issue itself is gone.
+IF OBJECT_ID('dbo.RSMSectionExclusions', 'U') IS NULL
+CREATE TABLE dbo.RSMSectionExclusions (
+  Id INT IDENTITY PRIMARY KEY,
+  TagName NVARCHAR(200) NOT NULL,
+  Issue NVARCHAR(1000) NOT NULL,
+  ExcludedBy NVARCHAR(50) NULL,
+  ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
 `
 
 func Migrate(conn *sql.DB) error {

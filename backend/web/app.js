@@ -188,6 +188,7 @@ const TAB_DEFS = [
   { id: "giamsat", label: "Giám sát/Chẩn đoán", role: ["GiamSat", "Moderator"] },
   { id: "congviec", label: "Công việc", role: ["CongViec", "Moderator"] },
   { id: "cbm", label: "Giám sát trực tuyến", role: null },
+  { id: "rsm", label: "Reliability", role: ["GiamSat", "Moderator"] },
   { id: "thongke", label: "Thống kê", role: null },
   { id: "weekly", label: "Báo cáo tuần", role: null },
   { id: "admin", label: "Quản trị", role: "Admin" },
@@ -224,7 +225,7 @@ function buildTabs() {
 function switchTab(id) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === id));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
-  const loaders = { giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, thongke: initThongKe, weekly: initWeeklyReport, kpi: loadKPISuCoPanel, admin: loadAdminPanel };
+  const loaders = { giamsat: loadGiamSat, congviec: loadCongViec, cbm: loadCBM, rsm: initRSMReview, thongke: initThongKe, weekly: initWeeklyReport, kpi: loadKPISuCoPanel, admin: loadAdminPanel };
   if (loaders[id]) loaders[id]().catch(e => alert("Lỗi tải dữ liệu: " + e.message));
 }
 
@@ -450,6 +451,53 @@ function fmtDateTime(iso) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
 
+// ---- Mục 3.3 báo cáo: Vấn đề TC-TVTB từ RSM Night Shift Report (PDF) ----
+// Chỉ đọc/lọc để hiển thị + tick chọn đưa vào báo cáo — không sinh ra dữ
+// liệu Giám sát/Chẩn đoán nào cả, đây là 1 mục báo cáo độc lập (xem
+// internal/report/rsm_section.go phía Go). Tick theo (Thiết bị + Vấn đề)
+// nên áp dụng cho mọi ngày sau còn xuất hiện đúng vấn đề đó.
+async function initRSMReview() {
+  const dateInput = document.getElementById("rsm-date");
+  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  return loadRSMReview();
+}
+async function loadRSMReview() {
+  const date = document.getElementById("rsm-date").value;
+  const t = document.getElementById("table-rsm");
+  t.innerHTML = "Đang tải...";
+  let rows;
+  try {
+    rows = (await api("/api/rsm-review?date=" + encodeURIComponent(date))) || [];
+  } catch (e) {
+    t.innerHTML = "Lỗi: " + esc(e.message);
+    return;
+  }
+  window.RSM_REVIEW_ROWS = rows;
+  t.innerHTML = "<tr><th>Đưa vào báo cáo</th><th>Phòng</th><th>Thiết bị</th><th>Vấn đề/Ghi nhận</th><th>Phương án xử lý</th><th>Đơn vị</th><th>Hạn xử lý</th><th>Trạng thái</th></tr>" +
+    (rows.length === 0
+      ? '<tr><td colspan="8" style="text-align:center;color:#888">Không có dữ liệu (chưa có file RSM PDF cho ngày này, hoặc không có vấn đề nào thuộc Ban BDSC)</td></tr>'
+      : rows.map((r, i) => `<tr>
+          <td style="text-align:center"><input type="checkbox" ${r.included ? "checked" : ""} onchange="toggleRSMInclude(${i}, this.checked)"></td>
+          <td>${esc(r.depart)}</td><td>${esc(r.tagName)}</td><td>${esc(r.issue)}</td>
+          <td>${esc(r.mitigationPlan)}</td><td>${esc(r.actionBy)}</td>
+          <td>${r.dueDate ? r.dueDate.substring(0, 10) : ""}</td><td>${esc(r.status)}</td>
+        </tr>`).join(""));
+}
+async function toggleRSMInclude(idx, included) {
+  const r = (window.RSM_REVIEW_ROWS || [])[idx];
+  if (!r) return;
+  try {
+    await api("/api/rsm-exclude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagName: r.tagName, issue: r.issue, included }),
+    });
+  } catch (e) {
+    alert("Lỗi: " + e.message);
+    loadRSMReview();
+  }
+}
+
 // ---- Thống kê (xem lại báo cáo theo ngày, giao diện giống PDF) ----
 async function initThongKe() {
   const dateInput = document.getElementById("thongke-date");
@@ -512,6 +560,7 @@ function renderWeeklyReport(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
+  const rsmRows = (d.rsm || []).map(r => [r.depart, r.tagName, r.issue, r.mitigationPlan, r.actionBy, r.dueDate ? r.dueDate.substring(0, 10) : "", r.status].map(esc));
   const congviecRows = (d.congviec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -560,6 +609,9 @@ function renderWeeklyReport(d) {
 
       <div class="rv-heading">Chẩn đoán bằng tool chuyên dụng</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+
+      <div class="rv-heading">Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
+      ${rvTable(["Phòng", "Thiết bị", "Vấn đề/Ghi nhận", "Phương án xử lý", "Đơn vị", "Hạn xử lý", "Trạng thái"], rsmRows)}
 
       <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
@@ -668,6 +720,7 @@ function renderReportView(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = (d.cbm || []).map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
   const giamsatRows = (d.giamSat || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
+  const rsmRows = (d.rsm || []).map(r => [r.depart, r.tagName, r.issue, r.mitigationPlan, r.actionBy, r.dueDate ? r.dueDate.substring(0, 10) : "", r.status].map(esc));
   const congviecRows = (d.congViec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -693,6 +746,8 @@ function renderReportView(d) {
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
       <div class="rv-sub">3.2. Chẩn đoán bằng tool chuyên dụng</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+      <div class="rv-sub">3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
+      ${rvTable(["Phòng", "Thiết bị", "Vấn đề/Ghi nhận", "Phương án xử lý", "Đơn vị", "Hạn xử lý", "Trạng thái"], rsmRows)}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
@@ -823,7 +878,7 @@ document.getElementById("form-user").addEventListener("submit", async e => {
 });
 
 async function loadAdminPanel() {
-  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline(), loadApprovalSchedule()]);
+  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadRSMPdfFolder(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline(), loadApprovalSchedule()]);
 }
 
 // ---- Gửi báo cáo tất cả các ngày (kể cả T7/CN) hay chỉ ngày thường ----
@@ -846,6 +901,17 @@ async function loadCBMExcelPath() {
 async function saveCBMExcelPath() {
   const cbmExcelPath = document.getElementById("cbmExcelPath").value;
   await api("/api/cbm-excel-path", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cbmExcelPath }) });
+  alert("Đã lưu.");
+}
+
+// ---- Thư mục file RSM Night Shift Report (PDF) ----
+async function loadRSMPdfFolder() {
+  const s = await api("/api/rsm-pdf-folder");
+  document.getElementById("rsmPdfFolder").value = s.rsmPdfFolder || "";
+}
+async function saveRSMPdfFolder() {
+  const rsmPdfFolder = document.getElementById("rsmPdfFolder").value;
+  await api("/api/rsm-pdf-folder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rsmPdfFolder }) });
   alert("Đã lưu.");
 }
 

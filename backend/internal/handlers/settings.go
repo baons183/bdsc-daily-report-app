@@ -52,6 +52,49 @@ func (e *Env) SetCBMExcelPathSetting(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
+const settingKeyRSMPdfFolder = "RSM_PDF_FOLDER"
+
+// effectiveRSMPdfFolder resolves the RSM PDF folder an Admin may have set
+// from the web UI, falling back to the .env value (e.RSMPdfFolder) if
+// nobody has ever changed it.
+func (e *Env) effectiveRSMPdfFolder() string {
+	return db.GetSetting(e.DB, settingKeyRSMPdfFolder, e.RSMPdfFolder)
+}
+
+type rsmPdfFolderResp struct {
+	RSMPdfFolder string `json:"rsmPdfFolder"`
+}
+
+// GetRSMPdfFolderSetting returns the currently effective RSM PDF folder
+// (DB override if set, otherwise the .env default).
+func (e *Env) GetRSMPdfFolderSetting(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, rsmPdfFolderResp{RSMPdfFolder: e.effectiveRSMPdfFolder()})
+}
+
+type setRSMPdfFolderReq struct {
+	RSMPdfFolder string `json:"rsmPdfFolder"`
+}
+
+// SetRSMPdfFolderSetting lets an Admin change the RSM PDF folder without
+// editing .env or restarting the app.
+func (e *Env) SetRSMPdfFolderSetting(w http.ResponseWriter, r *http.Request) {
+	var in setRSMPdfFolderReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
+		return
+	}
+	user := currentUser(r)
+	updatedBy := ""
+	if user != nil {
+		updatedBy = user.EmployeeCode
+	}
+	if err := db.SetSetting(e.DB, settingKeyRSMPdfFolder, in.RSMPdfFolder, updatedBy); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
 const settingKeySendAllDays = "SEND_ALL_DAYS"
 
 // EffectiveSendAllDays reports whether the daily report should run every

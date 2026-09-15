@@ -20,6 +20,7 @@ type Env struct {
 	CBMExcelPath         string
 	EmailFlowApprovalURL string
 	AppBaseURL           string
+	RSMPdfFolder         string
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
