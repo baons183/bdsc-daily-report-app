@@ -63,6 +63,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	for d := startD; !d.After(endD); d = d.AddDate(0, 0, 1) {
 		runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local).AddDate(0, 0, 1)
 		dayStart, dayEnd := window.ReportWindow(runAt, rh, rm)
+		report.SyncSuCoFromRSM(e.DB, folder, d, dayStart, dayEnd)
 		report.SyncReliabilityFromRSM(e.DB, folder, d, dayStart, dayEnd)
 	}
 

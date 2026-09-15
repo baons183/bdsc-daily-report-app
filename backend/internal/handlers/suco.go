@@ -8,12 +8,23 @@ import (
 
 	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
+	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
 )
 
+// ListSuCo syncs this window's RSM PDF section IV.3 (report.
+// SyncSuCoFromRSM) before reading — see ListReliability's comment for why
+// window.ReportDateForEntry is the right report date to sync against here
+// (the file for report date D lands ~06:30, still inside D's still-open
+// window, so opening this tab any time after that picks it up, editable/
+// deletable right here like any manually typed row).
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
-	start, end := window.EntryWindow(time.Now(), rh, rm)
+	now := time.Now()
+	start, end := window.EntryWindow(now, rh, rm)
+	reportDate := window.ReportDateForEntry(now, rh, rm)
+	report.SyncSuCoFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
+
 	rows, err := e.DB.QueryContext(r.Context(), `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
