@@ -22,3 +22,17 @@ ELSE
 		key, value, updatedBy, key, key, value, updatedBy)
 	return err
 }
+
+// ReportTime reads the Admin-configured daily-report send time from
+// dbo.ReportSchedule, falling back to (defaultHour, defaultMinute) if the
+// row is missing or unreadable. Shared by main.go's scheduler and every
+// handler/report function that needs "what time does the reporting day
+// start" for window.EntryWindow/ReportWindow — so changing the send time
+// in the Admin panel reshapes the actual report window, not just its
+// on-screen label.
+func ReportTime(conn *sql.DB, defaultHour, defaultMinute int) (hour, minute int) {
+	if err := conn.QueryRow(`SELECT ReportHour, ReportMinute FROM dbo.ReportSchedule WHERE Id = 1`).Scan(&hour, &minute); err != nil {
+		return defaultHour, defaultMinute
+	}
+	return hour, minute
+}

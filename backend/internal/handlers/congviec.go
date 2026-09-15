@@ -11,12 +11,14 @@ import (
 	"strconv"
 	"time"
 
+	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/window"
 )
 
 func (e *Env) ListCongViec(w http.ResponseWriter, r *http.Request) {
-	start, end := window.EntryWindow(time.Now())
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	start, end := window.EntryWindow(time.Now(), rh, rm)
 	rows, err := e.DB.QueryContext(r.Context(), `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(NoiDung,''), ISNULL(KeHoach,''), TienDo,
        ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
@@ -82,7 +84,8 @@ func (e *Env) CreateCongViec(w http.ResponseWriter, r *http.Request) {
 	if !checkNotLocked(w, r, e.DB, now) {
 		return
 	}
-	start, end := window.EntryWindow(now)
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	start, end := window.EntryWindow(now, rh, rm)
 
 	tx, err := e.DB.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -160,7 +163,8 @@ func (e *Env) DeleteCongViec(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	start, end := window.EntryWindow(ngayBaoCao)
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	start, end := window.EntryWindow(ngayBaoCao, rh, rm)
 	if err := renumber(r.Context(), e.DB, "CongViec", start, end); err != nil {
 		writeErr(w, 500, err.Error())
 		return

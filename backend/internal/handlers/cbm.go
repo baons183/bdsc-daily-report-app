@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
@@ -24,7 +25,8 @@ func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 		}
 		runAt = time.Date(d.Year(), d.Month(), d.Day(), 8, 0, 0, 0, time.Local)
 	}
-	start, end := window.ReportWindow(runAt)
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	start, end := window.ReportWindow(runAt, rh, rm)
 	rows := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
 	if rows == nil {
 		rows = []models.CBMRow{}

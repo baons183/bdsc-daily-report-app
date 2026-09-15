@@ -11,6 +11,7 @@ import (
 	"github.com/go-pdf/fpdf"
 
 	"bdscdailyreport/internal/models"
+	"bdscdailyreport/internal/window"
 )
 
 const (
@@ -733,7 +734,8 @@ func Generate(cfg BuildInput) (string, error) {
 	// data is really "yesterday's" activity even though the report is
 	// generated/sent this morning — the printed date reflects that.
 	reportDate := cfg.RunAt.AddDate(0, 0, -1)
-	b.letterhead(reportDate.Format("02/01/2006"), cfg.Start.Format("15:04 02/01"), cfg.End.Format("15:04 02/01"))
+	dispStart, dispEnd := window.DisplayBounds(cfg.Start, cfg.End, cfg.ReportHour, cfg.ReportMinute)
+	b.letterhead(reportDate.Format("02/01/2006"), dispStart.Format("15:04 02/01"), dispEnd.Format("15:04 02/01"))
 
 	b.sectionKPI(cfg.KPI)
 	b.sectionSuCo(cfg.SuCo)

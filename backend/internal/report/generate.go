@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	appdb "bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/window"
 )
@@ -29,6 +30,12 @@ type BuildInput struct {
 	// blank if nobody has Kiểm tra/Phê duyệt'd this report date yet.
 	ReviewedByName string
 	ApprovedByName string
+	// The Admin-configured report send time this window was computed
+	// against — used only to print a clean "Dữ liệu từ HH:MM ... đến HH:MM
+	// ..." label (window.DisplayBounds), since Start/End themselves carry
+	// a small internal ±1 minute/second buffer (see internal/window).
+	ReportHour   int
+	ReportMinute int
 }
 
 // GatherData collects everything a report for `runAt`'s window needs,
@@ -36,7 +43,8 @@ type BuildInput struct {
 // web "Thống kê" tab (HTML view of the same data).
 func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (BuildInput, error) {
 	ctx := context.Background()
-	start, end := window.ReportWindow(runAt)
+	rh, rm := appdb.ReportTime(db, 8, 0)
+	start, end := window.ReportWindow(runAt, rh, rm)
 
 	suco, err := FetchSuCo(ctx, db, start, end)
 	if err != nil {
@@ -67,6 +75,8 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 		UploadsDir:     uploadsDir,
 		ReviewedByName: reviewedByName.String,
 		ApprovedByName: approvedByName.String,
+		ReportHour:     rh,
+		ReportMinute:   rm,
 	}, nil
 }
 

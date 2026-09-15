@@ -247,7 +247,8 @@ func scheduleKPICarryForward(conn *sql.DB, cfg config.Config) {
 // means in practice: a manual save always replaces today's rows, whether
 // they came from this carry-forward or were still blank).
 func carryForwardKPIIfEmpty(conn *sql.DB, now time.Time) error {
-	_, end := window.EntryWindow(now)
+	rh, rm := db.ReportTime(conn, 8, 0)
+	_, end := window.EntryWindow(now, rh, rm)
 	target := end.Format("2006-01-02")
 	source := end.AddDate(0, 0, -1).Format("2006-01-02")
 
@@ -287,7 +288,8 @@ func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 		time.Sleep(20 * time.Second)
 		now := time.Now()
 		kh, km, ph, pm := env.EffectiveApprovalSchedule()
-		reportDate := window.CurrentReportDate(now).Format("2006-01-02")
+		rh, rm := db.ReportTime(conn, 8, 0)
+		reportDate := window.CurrentReportDate(now, rh, rm).Format("2006-01-02")
 
 		if now.Hour() == kh && now.Minute() == km && reportDate != lastReviewDate {
 			lastReviewDate = reportDate

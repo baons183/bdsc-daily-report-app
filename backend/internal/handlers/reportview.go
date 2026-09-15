@@ -6,6 +6,7 @@ import (
 
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
+	"bdscdailyreport/internal/window"
 )
 
 type reportImage struct {
@@ -68,13 +69,16 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The window spans yesterday 08:01 -> today 07:59, so the data is really
-	// "yesterday's" activity even though it's viewed/generated this morning —
-	// the displayed date reflects that, same as the PDF.
+	// The window spans (report time) yesterday -> (report time) today, so
+	// the data is really "yesterday's" activity even though it's
+	// viewed/generated this morning — the displayed date reflects that,
+	// same as the PDF. DisplayBounds shows the clean configured report
+	// time on both ends rather than data.Start/End's own ±1 min/sec buffer.
+	dispStart, dispEnd := window.DisplayBounds(data.Start, data.End, data.ReportHour, data.ReportMinute)
 	writeJSON(w, 200, reportViewResponse{
 		RunAt:    reportDate.Format("02/01/2006"),
-		Start:    data.Start.Format("15:04 02/01/2006"),
-		End:      data.End.Format("15:04 02/01/2006"),
+		Start:    dispStart.Format("15:04 02/01/2006"),
+		End:      dispEnd.Format("15:04 02/01/2006"),
 		KPI:      data.KPI,
 		SuCo:     data.SuCo,
 		GiamSat:  data.GiamSat,

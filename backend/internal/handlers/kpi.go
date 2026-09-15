@@ -1,27 +1,31 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
 
+	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
 )
 
 // kpiReportDate returns the calendar date KPI entries made "now" should be
-// filed under — the same report window SuCo/GiamSat/CongViec use (8:01
-// today -> 7:59 tomorrow), so a KPI update after the 8:01 cutoff rolls into
-// tomorrow's report exactly like the other sections do, instead of always
-// filing under the literal wall-clock date.
-func kpiReportDate(now time.Time) string {
-	_, end := window.EntryWindow(now)
+// filed under — the same report window SuCo/GiamSat/CongViec use (Admin-
+// configured report time +1min today -> report time -1min-1sec tomorrow),
+// so a KPI update after the cutoff rolls into tomorrow's report exactly
+// like the other sections do, instead of always filing under the literal
+// wall-clock date.
+func kpiReportDate(conn *sql.DB, now time.Time) string {
+	rh, rm := db.ReportTime(conn, 8, 0)
+	_, end := window.EntryWindow(now, rh, rm)
 	return end.Format("2006-01-02")
 }
 
 func (e *Env) ListKPI(w http.ResponseWriter, r *http.Request) {
-	today := kpiReportDate(time.Now())
+	today := kpiReportDate(e.DB, time.Now())
 	rows, err := e.DB.QueryContext(r.Context(), `
 SELECT Id, ChiTieu, ISNULL(Nhom,''), ISNULL(DVT,''), KeHoach, ThucHien, LuyKeThang, ISNULL(DanhGia,''), NgayBaoCao, ISNULL(CreatedBy,'')
 FROM dbo.KPIEntries WHERE NgayBaoCao = ? ORDER BY Id`, today)
@@ -39,7 +43,8 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ? ORDER BY Id`, today)
 		}
 		out = append(out, k)
 	}
-	start, end := window.EntryWindow(time.Now())
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	start, end := window.EntryWindow(time.Now(), rh, rm)
 	if err := report.ApplyKPIAutoCounts(r.Context(), e.DB, out, start, end); err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -56,7 +61,7 @@ func (e *Env) SaveKPI(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
 		return
 	}
-	today := kpiReportDate(time.Now())
+	today := kpiReportDate(e.DB, time.Now())
 	user := currentUser(r)
 	createdBy := ""
 	if user != nil {

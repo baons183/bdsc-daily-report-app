@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"bdscdailyreport/internal/auth"
+	appdb "bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/window"
 )
 
@@ -106,7 +107,8 @@ func checkNotLocked(w http.ResponseWriter, r *http.Request, db *sql.DB, entryTim
 	if claims != nil && auth.HasRole(claims.Roles, "Admin") {
 		return true
 	}
-	reportDate := window.ReportDateForEntry(entryTime).Format("2006-01-02")
+	rh, rm := appdb.ReportTime(db, 8, 0)
+	reportDate := window.ReportDateForEntry(entryTime, rh, rm).Format("2006-01-02")
 	var status string
 	err := db.QueryRow(`SELECT Status FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).Scan(&status)
 	if err == nil && (status == "reviewed" || status == "approved") {
