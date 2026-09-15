@@ -528,7 +528,7 @@ func (b *builder) sectionKPI(rows []models.KPIEntry) {
 }
 
 func (b *builder) sectionSuCo(rows []models.SuCo) {
-	b.heading("2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
+	b.heading("3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
 	groups := []groupedHeader{
 		{Label: "TT"}, {Label: "Thiết bị"}, {Label: "DM"}, {Label: "Tình trạng"},
 		{Label: "Thời gian dừng (h)", Sub: []string{"PX (h)", "TB (h)"}},
@@ -546,7 +546,7 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 }
 
 func (b *builder) sectionCBM(rows []models.CBMRow) {
-	b.subheading("3.1. Giám sát trực tuyến (online monitoring)")
+	b.subheading("2.1. Giám sát trực tuyến (online monitoring)")
 	headers := []string{"TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"}
 	widths := []float64{8, 20, 26, 32, 50, 27, 27}
 	var data [][]string
@@ -557,7 +557,7 @@ func (b *builder) sectionCBM(rows []models.CBMRow) {
 }
 
 func (b *builder) sectionGiamSat(rows []models.GiamSat) {
-	b.subheading("3.2. Chẩn đoán bằng tool chuyên dụng")
+	b.subheading("2.2. Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường")
 	headers := []string{"TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
 	widths := []float64{8, 24, 12, 40, 30, 42, 20, 14}
 	var data [][]string
@@ -568,9 +568,9 @@ func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 }
 
 func (b *builder) sectionReliability(rows []models.Reliability) {
-	b.subheading("3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị")
-	headers := []string{"TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"}
-	widths := []float64{10, 35, 65, 55, 15, 10}
+	b.subheading("2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ")
+	headers := []string{"TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"}
+	widths := []float64{10, 28, 55, 55, 28, 14}
 	var data [][]string
 	for _, r := range rows {
 		data = append(data, []string{strconv.Itoa(r.TT), r.ThietBi, r.VanDe, r.PhuongAn, r.DonVi, fmtDate(r.ThoiHan)})
@@ -749,13 +749,13 @@ func Generate(cfg BuildInput) (string, error) {
 	b.letterhead(reportDate.Format("02/01/2006"), dispStart.Format("15:04 02/01"), dispEnd.Format("15:04 02/01"))
 
 	b.sectionKPI(cfg.KPI)
-	b.sectionSuCo(cfg.SuCo)
-	b.heading("3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
+	b.heading("2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
 	b.sectionCBM(cfg.CBM)
 	b.pdf.Ln(2)
 	b.sectionGiamSat(cfg.GiamSat)
 	b.pdf.Ln(2)
 	b.sectionReliability(cfg.Reliability)
+	b.sectionSuCo(cfg.SuCo)
 	b.sectionCongViec(cfg.CongViec)
 	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)

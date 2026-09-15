@@ -189,7 +189,7 @@ const TAB_DEFS = [
   { id: "congviec", label: "Công việc", role: ["CongViec", "Moderator"] },
   { id: "cbm", label: "Giám sát trực tuyến", role: null },
   { id: "rsm", label: "Reliability", role: ["GiamSat", "Moderator"] },
-  { id: "thongke", label: "Thống kê", role: null },
+  { id: "thongke", label: "Báo cáo ngày", role: null },
   { id: "weekly", label: "Báo cáo tuần", role: null },
   { id: "admin", label: "Quản trị", role: "Admin" },
 ];
@@ -427,7 +427,7 @@ async function loadCBM() {
         </tr>`).join(""));
 }
 // Tick/bỏ tick "Đưa vào báo cáo" cho 1 dòng cụ thể — lưu ngay qua API, ảnh
-// hưởng tới PDF/email/Thống kê/Báo cáo tuần lần sinh báo cáo kế tiếp, chứ
+// hưởng tới PDF/email/Báo cáo ngày/Báo cáo tuần lần sinh báo cáo kế tiếp, chứ
 // không ẩn dòng khỏi tab Giám sát trực tuyến này (vẫn thấy để tick lại được).
 async function toggleCBMInclude(idx, included) {
   const r = (window.CBM_ROWS_CACHE || [])[idx];
@@ -465,7 +465,7 @@ async function loadRSMReview() {
   const rows = (await api("/api/reliability")) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-rsm");
-  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Hạn hoàn thành</th><th></th></tr>" +
+  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th></th></tr>" +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
@@ -507,7 +507,7 @@ document.getElementById("form-rsm").addEventListener("submit", async e => {
   loadRSMReview();
 });
 
-// ---- Thống kê (xem lại báo cáo theo ngày, giao diện giống PDF) ----
+// ---- Báo cáo ngày (xem lại báo cáo theo ngày, giao diện giống PDF) ----
 async function initThongKe() {
   const dateInput = document.getElementById("thongke-date");
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
@@ -569,7 +569,10 @@ function renderWeeklyReport(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
-  const reliabilityRows = (d.reliability || []).map(r => [r.tt, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan ? r.thoiHan.substring(0, 10) : ""].map(esc));
+  const reliabilityRows = (d.reliability || []).map(r => [
+    esc(r.tt), esc(r.thietBi), esc(r.vanDe), esc(r.phuongAn), esc(r.donVi),
+    r.thoiHan ? `<span style="white-space:nowrap">${esc(r.thoiHan.substring(0, 10))}</span>` : "",
+  ]);
   const congviecRows = (d.congviec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -610,17 +613,17 @@ function renderWeeklyReport(d) {
         <tr>${cbmLevelKeys.map(k => `<td>${cbmByLevel[k]}</td>`).join("")}</tr>
       </table>` : ""}
 
-      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
-
       <div class="rv-heading">Giám sát trực tuyến (online monitoring)</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
 
-      <div class="rv-heading">Chẩn đoán bằng tool chuyên dụng</div>
+      <div class="rv-heading">Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
 
-      <div class="rv-heading">Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
-      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"], reliabilityRows)}
+      <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ</div>
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
+
+      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
 
       <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
@@ -729,7 +732,10 @@ function renderReportView(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = (d.cbm || []).map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
   const giamsatRows = (d.giamSat || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
-  const reliabilityRows = (d.reliability || []).map(r => [r.tt, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan ? r.thoiHan.substring(0, 10) : ""].map(esc));
+  const reliabilityRows = (d.reliability || []).map(r => [
+    esc(r.tt), esc(r.thietBi), esc(r.vanDe), esc(r.phuongAn), esc(r.donVi),
+    r.thoiHan ? `<span style="white-space:nowrap">${esc(r.thoiHan.substring(0, 10))}</span>` : "",
+  ]);
   const congviecRows = (d.congViec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -747,16 +753,16 @@ function renderReportView(d) {
         ${kpiRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}
       </table>
 
-      <div class="rv-heading">2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
-      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
-
-      <div class="rv-heading">3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
-      <div class="rv-sub">3.1. Giám sát trực tuyến (online monitoring)</div>
+      <div class="rv-heading">2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
+      <div class="rv-sub">2.1. Giám sát trực tuyến (online monitoring)</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
-      <div class="rv-sub">3.2. Chẩn đoán bằng tool chuyên dụng</div>
+      <div class="rv-sub">2.2. Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
-      <div class="rv-sub">3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
-      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"], reliabilityRows)}
+      <div class="rv-sub">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ</div>
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
+
+      <div class="rv-heading">3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}

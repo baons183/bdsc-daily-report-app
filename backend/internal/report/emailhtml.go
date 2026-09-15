@@ -33,8 +33,8 @@ func RenderEmailHTML(data BuildInput, pdfLinkURL string) string {
 	fmt.Fprintf(&b, `<ul><li><a href="%s">%s</a></li></ul>`, html.EscapeString(pdfLinkURL), html.EscapeString(linkLabel))
 
 	emailKPISection(&b, data.KPI)
+	emailGiamSatSection(&b, data.CBM, data.GiamSat, data.Reliability)
 	emailSuCoSection(&b, data.SuCo)
-	emailGiamSatSection(&b, data.CBM, data.GiamSat)
 	emailCongViecSection(&b, data.CongViec)
 	emailNotesSection(&b, "5. VẤN ĐỀ CẦN ĐỀ XUẤT", "Đề xuất", "Không có đề xuất.", CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec))
 	emailNotesSection(&b, "6. LƯU Ý QUAN TRỌNG", "Lưu ý", "Các thiết bị hoạt động ổn định.", CombineLuuY(data.SuCo, data.GiamSat, data.CongViec))
@@ -107,7 +107,7 @@ func emailKPISection(b *strings.Builder, rows []models.KPIEntry) {
 }
 
 func emailSuCoSection(b *strings.Builder, rows []models.SuCo) {
-	emailHeading(b, "2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
+	emailHeading(b, "3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
 	if len(rows) == 0 {
 		emailEmptyMsg(b, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")
 		return
@@ -122,9 +122,9 @@ func emailSuCoSection(b *strings.Builder, rows []models.SuCo) {
 	b.WriteString(`</table>`)
 }
 
-func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []models.GiamSat) {
-	emailHeading(b, "3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
-	fmt.Fprintf(b, `<p style="margin:6px 0;font-weight:bold;">3.1. Giám sát trực tuyến (online monitoring)</p>`)
+func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []models.GiamSat, reliability []models.Reliability) {
+	emailHeading(b, "2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
+	fmt.Fprintf(b, `<p style="margin:6px 0;font-weight:bold;">2.1. Giám sát trực tuyến (online monitoring)</p>`)
 	if len(cbm) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 	} else {
@@ -136,16 +136,28 @@ func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []mode
 		}
 		b.WriteString(`</table>`)
 	}
-	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">3.2. Chẩn đoán bằng tool chuyên dụng</p>`)
+	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">2.2. Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường</p>`)
 	if len(giamsat) == 0 {
+		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
+	} else {
+		b.WriteString(emailTableStart())
+		b.WriteString(`<tr style="background:#e0e0e0;"><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án</th><th>Đơn vị</th><th>Thời hạn</th></tr>`)
+		for _, s := range giamsat {
+			fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style="text-align:center;">%s</td></tr>`,
+				s.TT, htmlText(s.ThietBi), htmlText(s.DM), htmlText(s.TinhTrang), htmlText(s.RuiRo), htmlText(s.PhuongAn), htmlText(s.DonVi), fmtDate(s.ThoiHan))
+		}
+		b.WriteString(`</table>`)
+	}
+	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ</p>`)
+	if len(reliability) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 		return
 	}
 	b.WriteString(emailTableStart())
-	b.WriteString(`<tr style="background:#e0e0e0;"><th>TT</th><th>Thiết bị</th><th>DM</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án</th><th>Đơn vị</th><th>Thời hạn</th></tr>`)
-	for _, s := range giamsat {
-		fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style="text-align:center;">%s</td></tr>`,
-			s.TT, htmlText(s.ThietBi), htmlText(s.DM), htmlText(s.TinhTrang), htmlText(s.RuiRo), htmlText(s.PhuongAn), htmlText(s.DonVi), fmtDate(s.ThoiHan))
+	b.WriteString(`<tr style="background:#e0e0e0;"><th>TT</th><th>Thiết bị</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th></tr>`)
+	for _, r := range reliability {
+		fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td style="text-align:center;">%s</td></tr>`,
+			r.TT, htmlText(r.ThietBi), htmlText(r.VanDe), htmlText(r.PhuongAn), htmlText(r.DonVi), fmtDate(r.ThoiHan))
 	}
 	b.WriteString(`</table>`)
 }
