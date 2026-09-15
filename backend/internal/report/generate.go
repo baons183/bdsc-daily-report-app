@@ -27,10 +27,13 @@ type BuildInput struct {
 	Reliability []models.Reliability
 	UploadsDir  string
 	OutDir      string
-	// Names to print in the PDF's "NGƯỜI LẬP"/"PHÊ DUYỆT" signature boxes —
-	// blank if nobody has Kiểm tra/Phê duyệt'd this report date yet.
+	// Names + timestamps to print in the PDF's "NGƯỜI LẬP"/"PHÊ DUYỆT"
+	// signature boxes — blank/zero if nobody has Kiểm tra/Phê duyệt'd this
+	// report date yet.
 	ReviewedByName string
 	ApprovedByName string
+	ReviewedAt     time.Time
+	ApprovedAt     time.Time
 	// The Admin-configured report send time this window was computed
 	// against — used only to print a clean "Dữ liệu từ HH:MM ... đến HH:MM
 	// ..." label (window.DisplayBounds), since Start/End themselves carry
@@ -72,8 +75,9 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 
 	reportDate := reportDateT.Format("2006-01-02")
 	var reviewedByName, approvedByName sql.NullString
-	db.QueryRowContext(ctx, `SELECT ReviewedByName, ApprovedByName FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
-		Scan(&reviewedByName, &approvedByName)
+	var reviewedAt, approvedAt sql.NullTime
+	db.QueryRowContext(ctx, `SELECT ReviewedByName, ReviewedAt, ApprovedByName, ApprovedAt FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
+		Scan(&reviewedByName, &reviewedAt, &approvedByName, &approvedAt)
 
 	SyncReliabilityFromRSM(db, rsmPdfFolder, reportDateT, start, end)
 	reliability, err := FetchReliability(ctx, db, start, end)
@@ -87,6 +91,8 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 		UploadsDir:     uploadsDir,
 		ReviewedByName: reviewedByName.String,
 		ApprovedByName: approvedByName.String,
+		ReviewedAt:     reviewedAt.Time,
+		ApprovedAt:     approvedAt.Time,
 		ReportHour:     rh,
 		ReportMinute:   rm,
 	}, nil

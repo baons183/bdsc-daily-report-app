@@ -14,13 +14,15 @@ import (
 )
 
 type Env struct {
-	DB                   *sql.DB
-	UploadsDir           string
-	AssetDBName          string
-	CBMExcelPath         string
-	EmailFlowApprovalURL string
-	AppBaseURL           string
-	RSMPdfFolder         string
+	DB                        *sql.DB
+	UploadsDir                string
+	AssetDBName               string
+	CBMExcelPath              string
+	EmailFlowApprovalURL      string
+	AppBaseURL                string
+	RSMPdfFolder              string
+	ReportsDir                string
+	ReportSharePointURLPrefix string
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

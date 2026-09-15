@@ -3,10 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
+	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/emailer"
+	"bdscdailyreport/internal/report"
 )
 
 type reportApprovalResp struct {
@@ -132,7 +135,31 @@ func (e *Env) ApproveReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	e.RegenerateApprovedPDF(in.Date)
 	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// RegenerateApprovedPDF re-renders reportDate's PDF (same file path, so the
+// link already emailed that morning keeps working) now that Phê duyệt has
+// completed — both NGƯỜI LẬP/PHÊ DUYỆT names and timestamps are only known
+// after this point, so the PDF generated at report time (before anyone
+// reviewed/approved) never had them. Called after both a manual Approver
+// click (ApproveReport) and the automatic deadline fallback (main.go's
+// scheduleApprovalDeadlines) — either way the report is now final, and
+// the on-disk PDF should carry the signatures that made it so. Best-effort:
+// a failure here is only logged, never surfaced to the caller, since the
+// approval itself already succeeded and shouldn't be rolled back over a
+// PDF re-render problem.
+func (e *Env) RegenerateApprovedPDF(reportDate string) {
+	d, err := time.Parse("2006-01-02", reportDate)
+	if err != nil {
+		return
+	}
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local).AddDate(0, 0, 1)
+	if _, _, err := report.RunDaily(e.DB, e.UploadsDir, e.ReportsDir, e.effectiveCBMExcelPath(), e.effectiveRSMPdfFolder(), e.ReportSharePointURLPrefix, runAt); err != nil {
+		log.Printf("loi tao lai PDF sau Phe duyet cho ngay %s: %v", reportDate, err)
+	}
 }
 
 // RejectReport is an Approver sending a "reviewed" report back to "draft"

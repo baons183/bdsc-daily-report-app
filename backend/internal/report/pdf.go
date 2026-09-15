@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-pdf/fpdf"
 
@@ -164,9 +165,10 @@ func (b *builder) letterhead(runAt, start, end string) {
 // signatureBlock reproduces the "NGƯỜI LẬP / PHÊ DUYỆT" sign-off row at the
 // end of the original Word report. reviewedByName/approvedByName are the
 // Moderator/Approver who Kiểm tra/Phê duyệt'd this report date (blank if
-// not yet done) — printed below the "(Ký, ghi rõ họ tên)" hint so the PDF
-// carries a name even though there's no real signature image.
-func (b *builder) signatureBlock(reviewedByName, approvedByName string) {
+// not yet done) — printed below the "(Ký, ghi rõ họ tên)" hint, with the
+// exact Kiểm tra/Phê duyệt timestamp printed under the name, so the PDF
+// carries a name+time even though there's no real signature image.
+func (b *builder) signatureBlock(reviewedByName, approvedByName string, reviewedAt, approvedAt time.Time) {
 	pdf := b.pdf
 	if pdf.GetY() > pageBottom-35 {
 		pdf.AddPage()
@@ -183,7 +185,19 @@ func (b *builder) signatureBlock(reviewedByName, approvedByName string) {
 	pdf.SetFont("Times", "B", 11)
 	pdf.CellFormat(half, 5, reviewedByName, "", 0, "C", false, 0, "")
 	pdf.CellFormat(half, 5, approvedByName, "", 1, "C", false, 0, "")
+	pdf.SetFont("Times", "I", 9)
+	pdf.CellFormat(half, 5, fmtSignTime(reviewedAt), "", 0, "C", false, 0, "")
+	pdf.CellFormat(half, 5, fmtSignTime(approvedAt), "", 1, "C", false, 0, "")
 	pdf.SetFont("Times", "", 11)
+}
+
+// fmtSignTime formats a Kiểm tra/Phê duyệt timestamp for signatureBlock, or
+// "" if that step hasn't happened yet (zero time).
+func fmtSignTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("15:04 02/01/2006")
 }
 
 func (b *builder) title(text string, size float64) {
@@ -760,7 +774,7 @@ func Generate(cfg BuildInput) (string, error) {
 	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionImages(cfg.CongViec)
-	b.signatureBlock(cfg.ReviewedByName, cfg.ApprovedByName)
+	b.signatureBlock(cfg.ReviewedByName, cfg.ApprovedByName, cfg.ReviewedAt, cfg.ApprovedAt)
 
 	if err := os.MkdirAll(cfg.OutDir, 0o755); err != nil {
 		return "", err

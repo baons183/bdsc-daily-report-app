@@ -30,7 +30,7 @@ func main() {
 	}
 	log.Printf("da ket noi database %s/%s", cfg.DBServer, cfg.DBDatabase)
 
-	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL, AppBaseURL: cfg.AppBaseURL, RSMPdfFolder: cfg.RSMPdfFolder}
+	env := &handlers.Env{DB: conn, UploadsDir: cfg.UploadsDir, AssetDBName: cfg.AssetDBName, CBMExcelPath: cfg.CBMExcelPath, EmailFlowApprovalURL: cfg.EmailFlowApprovalURL, AppBaseURL: cfg.AppBaseURL, RSMPdfFolder: cfg.RSMPdfFolder, ReportsDir: cfg.ReportsDir, ReportSharePointURLPrefix: cfg.ReportSharePointURLPrefix}
 
 	mux := http.NewServeMux()
 
@@ -329,6 +329,7 @@ func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 					log.Printf("loi tu dong Phe duyet bao cao %s: %v", reportDate, err)
 				} else {
 					log.Printf("da tu dong Phe duyet bao cao %s (qua han, gan cho %s)", reportDate, autoApproverCode)
+					env.RegenerateApprovedPDF(reportDate)
 				}
 			}
 		}
