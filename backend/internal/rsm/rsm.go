@@ -314,3 +314,25 @@ func FilterByDepartment(rows []Row, keywords []string) []Row {
 	}
 	return out
 }
+
+// KeepDepartmentTokens returns only the "/"-separated tokens of actionBy
+// that match a keyword (same matching rule as FilterByDepartment), joined
+// back with "/" — e.g. "OMS/RPD/RTD/MNT" with the default keyword list
+// becomes just "MNT". Used to populate a Reliability row's "Đơn vị thực
+// hiện" with only Ban BDSC's own department(s), dropping whichever other
+// departments the PDF's "Action by" column also lists.
+func KeepDepartmentTokens(actionBy string, keywords []string) string {
+	keySet := make(map[string]bool, len(keywords))
+	for _, k := range keywords {
+		keySet[strings.ToUpper(k)] = true
+	}
+	splitter := func(r rune) bool { return r == '/' || r == ',' }
+	var kept []string
+	for _, tok := range strings.FieldsFunc(actionBy, splitter) {
+		trimmed := strings.TrimSpace(tok)
+		if keySet[strings.ToUpper(trimmed)] {
+			kept = append(kept, trimmed)
+		}
+	}
+	return strings.Join(kept, "/")
+}

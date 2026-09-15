@@ -15,19 +15,19 @@ type reportImage struct {
 }
 
 type reportViewResponse struct {
-	RunAt    string             `json:"runAt"`
-	Start    string             `json:"start"`
-	End      string             `json:"end"`
-	KPI      []models.KPIEntry  `json:"kpi"`
-	SuCo     []models.SuCo      `json:"suco"`
-	GiamSat  []models.GiamSat   `json:"giamSat"`
-	CongViec []models.CongViec  `json:"congViec"`
-	CBM      []models.CBMRow    `json:"cbm"`
-	RSM      []models.RSMRow    `json:"rsm"`
-	DeXuat   []report.NoteItem  `json:"deXuat"`
-	LuuY     []report.NoteItem  `json:"luuY"`
-	Images   []reportImage      `json:"images"`
-	Approval reportApprovalResp `json:"approval"`
+	RunAt       string               `json:"runAt"`
+	Start       string               `json:"start"`
+	End         string               `json:"end"`
+	KPI         []models.KPIEntry    `json:"kpi"`
+	SuCo        []models.SuCo        `json:"suco"`
+	GiamSat     []models.GiamSat     `json:"giamSat"`
+	CongViec    []models.CongViec    `json:"congViec"`
+	CBM         []models.CBMRow      `json:"cbm"`
+	Reliability []models.Reliability `json:"reliability"`
+	DeXuat      []report.NoteItem    `json:"deXuat"`
+	LuuY        []report.NoteItem    `json:"luuY"`
+	Images      []reportImage        `json:"images"`
+	Approval    reportApprovalResp   `json:"approval"`
 }
 
 // GetReportView powers the "Thống kê" tab: the same data that would go into
@@ -77,18 +77,18 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 	// time on both ends rather than data.Start/End's own ±1 min/sec buffer.
 	dispStart, dispEnd := window.DisplayBounds(data.Start, data.End, data.ReportHour, data.ReportMinute)
 	writeJSON(w, 200, reportViewResponse{
-		RunAt:    reportDate.Format("02/01/2006"),
-		Start:    dispStart.Format("15:04 02/01/2006"),
-		End:      dispEnd.Format("15:04 02/01/2006"),
-		KPI:      data.KPI,
-		SuCo:     data.SuCo,
-		GiamSat:  data.GiamSat,
-		CongViec: data.CongViec,
-		CBM:      data.CBM,
-		RSM:      data.RSM,
-		DeXuat:   report.CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec),
-		LuuY:     report.CombineLuuY(data.SuCo, data.GiamSat, data.CongViec),
-		Images:   images,
-		Approval: approval,
+		RunAt:       reportDate.Format("02/01/2006"),
+		Start:       dispStart.Format("15:04 02/01/2006"),
+		End:         dispEnd.Format("15:04 02/01/2006"),
+		KPI:         data.KPI,
+		SuCo:        data.SuCo,
+		GiamSat:     data.GiamSat,
+		CongViec:    data.CongViec,
+		CBM:         data.CBM,
+		Reliability: data.Reliability,
+		DeXuat:      report.CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec),
+		LuuY:        report.CombineLuuY(data.SuCo, data.GiamSat, data.CongViec),
+		Images:      images,
+		Approval:    approval,
 	})
 }

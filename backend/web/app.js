@@ -237,7 +237,7 @@ function fd2obj(form) {
 
 // Cache dòng dữ liệu mới tải để nút "Sửa" có sẵn dữ liệu điền lại vào form
 // mà không cần thêm API lấy 1 dòng riêng.
-const ROWS_CACHE = { suco: {}, giamsat: {}, congviec: {} };
+const ROWS_CACHE = { suco: {}, giamsat: {}, congviec: {}, rsm: {} };
 
 // Ô Sửa/Xóa chỉ hiện nếu chính chủ tạo dòng đó hoặc là Admin — khớp luật
 // checkOwnership phía server (server vẫn chặn lại nếu cố tình gọi API thẳng).
@@ -405,7 +405,7 @@ document.getElementById("form-congviec").addEventListener("submit", async e => {
   loadCongViec();
 });
 
-["form-suco", "form-giamsat", "form-congviec"].forEach(id => {
+["form-suco", "form-giamsat", "form-congviec", "form-rsm"].forEach(id => {
   attachAssetAutocomplete(document.getElementById(id));
 });
 
@@ -451,52 +451,61 @@ function fmtDateTime(iso) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
 
-// ---- Mục 3.3 báo cáo: Vấn đề TC-TVTB từ RSM Night Shift Report (PDF) ----
-// Chỉ đọc/lọc để hiển thị + tick chọn đưa vào báo cáo — không sinh ra dữ
-// liệu Giám sát/Chẩn đoán nào cả, đây là 1 mục báo cáo độc lập (xem
-// internal/report/rsm_section.go phía Go). Tick theo (Thiết bị + Vấn đề)
-// nên áp dụng cho mọi ngày sau còn xuất hiện đúng vấn đề đó.
+// ---- Reliability (mục 3.3 báo cáo) ----
+// Kết hợp nhập tay và tự động: mỗi lần tải tab này, server tự đồng bộ
+// thêm các vấn đề mới từ file RSM PDF của "hôm nay" (nếu có) vào cùng
+// bảng — dòng tự động (createdBy rỗng) sửa/xoá được như dòng nhập tay,
+// không còn cơ chế tick "đưa vào báo cáo" riêng nữa (xoá dòng là cách
+// duy nhất để bỏ nó khỏi báo cáo).
 async function initRSMReview() {
-  const dateInput = document.getElementById("rsm-date");
-  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
   return loadRSMReview();
 }
 async function loadRSMReview() {
-  const date = document.getElementById("rsm-date").value;
+  document.getElementById("form-rsm").hidden = !hasRole("GiamSat");
+  const rows = (await api("/api/reliability")) || [];
+  ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-rsm");
-  t.innerHTML = "Đang tải...";
-  let rows;
-  try {
-    rows = (await api("/api/rsm-review?date=" + encodeURIComponent(date))) || [];
-  } catch (e) {
-    t.innerHTML = "Lỗi: " + esc(e.message);
-    return;
-  }
-  window.RSM_REVIEW_ROWS = rows;
-  t.innerHTML = "<tr><th>Đưa vào báo cáo</th><th>Phòng</th><th>Thiết bị</th><th>Vấn đề/Ghi nhận</th><th>Phương án xử lý</th><th>Đơn vị</th><th>Hạn xử lý</th><th>Trạng thái</th></tr>" +
-    (rows.length === 0
-      ? '<tr><td colspan="8" style="text-align:center;color:#888">Không có dữ liệu (chưa có file RSM PDF cho ngày này, hoặc không có vấn đề nào thuộc Ban BDSC)</td></tr>'
-      : rows.map((r, i) => `<tr>
-          <td style="text-align:center"><input type="checkbox" ${r.included ? "checked" : ""} onchange="toggleRSMInclude(${i}, this.checked)"></td>
-          <td>${esc(r.depart)}</td><td>${esc(r.tagName)}</td><td>${esc(r.issue)}</td>
-          <td>${esc(r.mitigationPlan)}</td><td>${esc(r.actionBy)}</td>
-          <td>${r.dueDate ? r.dueDate.substring(0, 10) : ""}</td><td>${esc(r.status)}</td>
-        </tr>`).join(""));
+  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Hạn hoàn thành</th><th></th></tr>" +
+    rows.map(r => `<tr>
+      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
+      <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
+      <td>${reliabilityActionButtons(r)}</td>
+    </tr>`).join("");
 }
-async function toggleRSMInclude(idx, included) {
-  const r = (window.RSM_REVIEW_ROWS || [])[idx];
+// Dòng tự động lấy từ RSM PDF có createdBy rỗng (không thuộc về ai cụ
+// thể) — cho phép bất kỳ ai có quyền GiamSat sửa/xoá, khác với các bảng
+// khác chỉ cho chính chủ hoặc Moderator/Admin (khớp canTouchReliability
+// phía server).
+function canEditReliability(createdBy) {
+  return hasRole("Admin") || createdBy === "" || createdBy === EMPCODE;
+}
+function reliabilityActionButtons(r) {
+  if (!canEditReliability(r.createdBy)) return "";
+  return `<button class="btn" style="margin-top:0" onclick="editReliability(${r.id})">Sửa</button> `
+    + `<button class="btn danger" onclick="delRow('reliability', ${r.id})">Xóa</button>`;
+}
+function editReliability(id) {
+  const r = ROWS_CACHE.rsm[id];
   if (!r) return;
-  try {
-    await api("/api/rsm-exclude", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tagName: r.tagName, issue: r.issue, included }),
-    });
-  } catch (e) {
-    alert("Lỗi: " + e.message);
-    loadRSMReview();
-  }
+  enterEditMode(document.getElementById("form-rsm"), id, {
+    thietBi: r.thietBi, vanDe: r.vanDe, phuongAn: r.phuongAn, donVi: r.donVi,
+    thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "",
+  });
 }
+document.getElementById("form-rsm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const form = e.target;
+  const body = fd2obj(form);
+  const editId = form.dataset.editId;
+  if (editId) {
+    await api(`/api/reliability/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    exitEditMode(form);
+  } else {
+    await api("/api/reliability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    form.reset();
+  }
+  loadRSMReview();
+});
 
 // ---- Thống kê (xem lại báo cáo theo ngày, giao diện giống PDF) ----
 async function initThongKe() {
@@ -560,7 +569,7 @@ function renderWeeklyReport(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
-  const rsmRows = (d.rsm || []).map(r => [r.depart, r.tagName, r.issue, r.mitigationPlan, r.actionBy, r.dueDate ? r.dueDate.substring(0, 10) : "", r.status].map(esc));
+  const reliabilityRows = (d.reliability || []).map(r => [r.tt, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan ? r.thoiHan.substring(0, 10) : ""].map(esc));
   const congviecRows = (d.congviec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -611,7 +620,7 @@ function renderWeeklyReport(d) {
       ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
 
       <div class="rv-heading">Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
-      ${rvTable(["Phòng", "Thiết bị", "Vấn đề/Ghi nhận", "Phương án xử lý", "Đơn vị", "Hạn xử lý", "Trạng thái"], rsmRows)}
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"], reliabilityRows)}
 
       <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
@@ -720,7 +729,7 @@ function renderReportView(d) {
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = (d.cbm || []).map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
   const giamsatRows = (d.giamSat || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
-  const rsmRows = (d.rsm || []).map(r => [r.depart, r.tagName, r.issue, r.mitigationPlan, r.actionBy, r.dueDate ? r.dueDate.substring(0, 10) : "", r.status].map(esc));
+  const reliabilityRows = (d.reliability || []).map(r => [r.tt, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan ? r.thoiHan.substring(0, 10) : ""].map(esc));
   const congviecRows = (d.congViec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -747,7 +756,7 @@ function renderReportView(d) {
       <div class="rv-sub">3.2. Chẩn đoán bằng tool chuyên dụng</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
       <div class="rv-sub">3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị</div>
-      ${rvTable(["Phòng", "Thiết bị", "Vấn đề/Ghi nhận", "Phương án xử lý", "Đơn vị", "Hạn xử lý", "Trạng thái"], rsmRows)}
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"], reliabilityRows)}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
@@ -1026,6 +1035,7 @@ async function delRow(kind, id) {
   if (kind === "suco") { loadSuCo(); refreshKPIAutoCells(); }
   if (kind === "giamsat") loadGiamSat();
   if (kind === "congviec") loadCongViec();
+  if (kind === "reliability") loadRSMReview();
 }
 
 function esc(s) {

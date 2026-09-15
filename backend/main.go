@@ -83,8 +83,10 @@ func main() {
 
 	mux.Handle("GET /api/rsm-pdf-folder", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetRSMPdfFolderSetting))))
 	mux.Handle("POST /api/rsm-pdf-folder", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetRSMPdfFolderSetting))))
-	mux.Handle("GET /api/rsm-review", authMw(http.HandlerFunc(env.GetRSMReview)))
-	mux.Handle("POST /api/rsm-exclude", authMw(http.HandlerFunc(env.SetRSMSectionExclusion)))
+	mux.Handle("GET /api/reliability", authMw(http.HandlerFunc(env.ListReliability)))
+	mux.Handle("POST /api/reliability", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.CreateReliability))))
+	mux.Handle("PUT /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.UpdateReliability))))
+	mux.Handle("DELETE /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteReliability))))
 
 	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
 	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))

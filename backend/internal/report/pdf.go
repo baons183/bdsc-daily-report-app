@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-pdf/fpdf"
 
@@ -568,26 +567,15 @@ func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 	b.table(headers, widths, data)
 }
 
-func (b *builder) sectionRSM(rows []models.RSMRow) {
+func (b *builder) sectionReliability(rows []models.Reliability) {
 	b.subheading("3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị")
-	headers := []string{"Phòng", "Thiết bị", "Vấn đề/Ghi nhận", "Phương án xử lý", "Đơn vị", "Hạn xử lý", "Trạng thái"}
-	widths := []float64{14, 30, 45, 55, 20, 16, 10}
+	headers := []string{"TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Hạn hoàn thành"}
+	widths := []float64{10, 35, 65, 55, 15, 10}
 	var data [][]string
 	for _, r := range rows {
-		data = append(data, []string{r.Depart, r.TagName, r.Issue, r.MitigationPlan, r.ActionBy, fmtRSMDate(r.DueDate), r.Status})
+		data = append(data, []string{strconv.Itoa(r.TT), r.ThietBi, r.VanDe, r.PhuongAn, r.DonVi, fmtDate(r.ThoiHan)})
 	}
 	b.table(headers, widths, data)
-}
-
-// fmtRSMDate reformats an RSM row's YYYY-MM-DD due date (already
-// normalized by internal/rsm) into the same DD/MM/YYYY style every other
-// date in this report uses.
-func fmtRSMDate(s string) string {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return s
-	}
-	return t.Format("02/01/2006")
 }
 
 func (b *builder) sectionCongViec(rows []models.CongViec) {
@@ -767,7 +755,7 @@ func Generate(cfg BuildInput) (string, error) {
 	b.pdf.Ln(2)
 	b.sectionGiamSat(cfg.GiamSat)
 	b.pdf.Ln(2)
-	b.sectionRSM(cfg.RSM)
+	b.sectionReliability(cfg.Reliability)
 	b.sectionCongViec(cfg.CongViec)
 	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)

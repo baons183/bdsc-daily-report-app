@@ -7,19 +7,20 @@ import (
 	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
+	"bdscdailyreport/internal/window"
 )
 
 type weeklyReportResp struct {
-	KPI         []models.KPIEntry `json:"kpi"`
-	SuCo        []models.SuCo     `json:"suco"`
-	SuCoSummary map[string]int    `json:"sucoSummary"`
-	GiamSat     []models.GiamSat  `json:"giamsat"`
-	CBM         []models.CBMRow   `json:"cbm"`
-	RSM         []models.RSMRow   `json:"rsm"`
-	CongViec    []models.CongViec `json:"congviec"`
-	Images      []reportImage     `json:"images"`
-	DeXuat      []report.NoteItem `json:"deXuat"`
-	LuuY        []report.NoteItem `json:"luuY"`
+	KPI         []models.KPIEntry    `json:"kpi"`
+	SuCo        []models.SuCo        `json:"suco"`
+	SuCoSummary map[string]int       `json:"sucoSummary"`
+	GiamSat     []models.GiamSat     `json:"giamsat"`
+	CBM         []models.CBMRow      `json:"cbm"`
+	Reliability []models.Reliability `json:"reliability"`
+	CongViec    []models.CongViec    `json:"congviec"`
+	Images      []reportImage        `json:"images"`
+	DeXuat      []report.NoteItem    `json:"deXuat"`
+	LuuY        []report.NoteItem    `json:"luuY"`
 }
 
 // GetWeeklyReport powers the "Báo cáo tuần" tab: the same sections as the
@@ -53,6 +54,18 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Sync mỗi ngày trong khoảng đã chọn với file RSM PDF của ngày đó (nếu
+	// có) trước khi đọc, để Báo cáo tuần không bị thiếu dữ liệu của những
+	// ngày chưa ai mở tab Sự cố/Reliability hoặc sinh báo cáo ngày.
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	folder := e.effectiveRSMPdfFolder()
+	for d := startD; !d.After(endD); d = d.AddDate(0, 0, 1) {
+		runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local).AddDate(0, 0, 1)
+		dayStart, dayEnd := window.ReportWindow(runAt, rh, rm)
+		report.SyncReliabilityFromRSM(e.DB, folder, d, dayStart, dayEnd)
+	}
+
 	kpi, err := report.FetchWeeklyKPI(ctx, e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -75,9 +88,9 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	if cbm == nil {
 		cbm = []models.CBMRow{}
 	}
-	rsmRows, err := report.FetchRSMSection(e.DB, e.effectiveRSMPdfFolder(), start, end)
+	reliability, err := report.FetchReliability(ctx, e.DB, start, end)
 	if err != nil {
-		rsmRows = []models.RSMRow{}
+		reliability = []models.Reliability{}
 	}
 	congviecAll, err := report.FetchCongViec(ctx, e.DB, start, end)
 	if err != nil {
@@ -126,7 +139,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		SuCoSummary: summary,
 		GiamSat:     giamsat,
 		CBM:         cbm,
-		RSM:         rsmRows,
+		Reliability: reliability,
 		CongViec:    congviecLatest,
 		Images:      images,
 		DeXuat:      report.CombineDeXuat(suco, giamsat, congviecLatest),

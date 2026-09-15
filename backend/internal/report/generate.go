@@ -16,17 +16,17 @@ import (
 // BuildInput carries everything the PDF renderer needs; kept separate from
 // the DB layer so Generate() has no side effects other than writing the file.
 type BuildInput struct {
-	RunAt      time.Time
-	Start      time.Time
-	End        time.Time
-	KPI        []models.KPIEntry
-	SuCo       []models.SuCo
-	GiamSat    []models.GiamSat
-	CongViec   []models.CongViec
-	CBM        []models.CBMRow
-	RSM        []models.RSMRow
-	UploadsDir string
-	OutDir     string
+	RunAt       time.Time
+	Start       time.Time
+	End         time.Time
+	KPI         []models.KPIEntry
+	SuCo        []models.SuCo
+	GiamSat     []models.GiamSat
+	CongViec    []models.CongViec
+	CBM         []models.CBMRow
+	Reliability []models.Reliability
+	UploadsDir  string
+	OutDir      string
 	// Names to print in the PDF's "NGƯỜI LẬP"/"PHÊ DUYỆT" signature boxes —
 	// blank if nobody has Kiểm tra/Phê duyệt'd this report date yet.
 	ReviewedByName string
@@ -46,6 +46,7 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 	ctx := context.Background()
 	rh, rm := appdb.ReportTime(db, 8, 0)
 	start, end := window.ReportWindow(runAt, rh, rm)
+	reportDateT := runAt.AddDate(0, 0, -1)
 
 	suco, err := FetchSuCo(ctx, db, start, end)
 	if err != nil {
@@ -68,20 +69,20 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 		cbm = FilterCBMExcluded(cbm, excluded)
 	}
 
-	reportDateT := runAt.AddDate(0, 0, -1)
 	reportDate := reportDateT.Format("2006-01-02")
 	var reviewedByName, approvedByName sql.NullString
 	db.QueryRowContext(ctx, `SELECT ReviewedByName, ApprovedByName FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
 		Scan(&reviewedByName, &approvedByName)
 
-	rsmRows, err := FetchRSMSection(db, rsmPdfFolder, reportDateT, reportDateT)
+	SyncReliabilityFromRSM(db, rsmPdfFolder, reportDateT, start, end)
+	reliability, err := FetchReliability(ctx, db, start, end)
 	if err != nil {
-		rsmRows = nil
+		reliability = nil
 	}
 
 	return BuildInput{
 		RunAt: runAt, Start: start, End: end,
-		KPI: kpi, SuCo: suco, GiamSat: giamsat, CongViec: congviec, CBM: cbm, RSM: rsmRows,
+		KPI: kpi, SuCo: suco, GiamSat: giamsat, CongViec: congviec, CBM: cbm, Reliability: reliability,
 		UploadsDir:     uploadsDir,
 		ReviewedByName: reviewedByName.String,
 		ApprovedByName: approvedByName.String,

@@ -248,18 +248,23 @@ CREATE TABLE dbo.CBMExclusions (
   ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 
--- IV.2 issues (report section "3.3. Vấn đề khác liên quan tới độ tin cậy
--- và toàn vẹn thiết bị") a user has unticked "đưa vào báo cáo" for —
--- identified by (TagName, Issue), the same pair models.RSMIssueKey uses,
--- so the same open issue stays excluded every day it keeps reappearing in
--- the RSM PDF until the issue itself is gone.
-IF OBJECT_ID('dbo.RSMSectionExclusions', 'U') IS NULL
-CREATE TABLE dbo.RSMSectionExclusions (
-  Id INT IDENTITY PRIMARY KEY,
-  TagName NVARCHAR(200) NOT NULL,
-  Issue NVARCHAR(1000) NOT NULL,
-  ExcludedBy NVARCHAR(50) NULL,
-  ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
+-- Report section "3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn
+-- thiết bị" — same shape/lifecycle as dbo.GiamSat (per-report-window TT,
+-- editable/deletable like any manually-entered row), except rows can also
+-- be auto-imported from BSR's daily RSM PDF (see
+-- report.SyncReliabilityFromRSM) — CreatedBy is blank for those.
+IF OBJECT_ID('dbo.Reliability', 'U') IS NULL
+CREATE TABLE dbo.Reliability (
+  Id INT IDENTITY(1,1) PRIMARY KEY,
+  TT INT NOT NULL,
+  ThietBi NVARCHAR(300) NOT NULL,
+  VanDe NVARCHAR(MAX) NULL,
+  PhuongAn NVARCHAR(MAX) NULL,
+  DonVi NVARCHAR(200) NULL,
+  ThoiHan DATE NULL,
+  NgayBaoCao DATETIME NOT NULL,
+  CreatedBy NVARCHAR(50) NULL,
+  CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 `
 

@@ -136,11 +136,15 @@
     </section>
 
     <section id="panel-rsm" class="panel">
-      <p>Mục 3.3 báo cáo — tự động lấy từ file RSM Night Shift Report (PDF), lọc theo các phòng/nhóm kỹ thuật của Ban BDSC. Bỏ tick "Đưa vào báo cáo" nếu vấn đề này không cần đưa vào báo cáo (áp dụng cho mọi ngày sau còn xuất hiện vấn đề này, tới khi xử lý xong).</p>
-      <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <label>Chọn ngày: <input type="date" id="rsm-date"></label>
-        <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
-      </div>
+      <p>Mục 3.3 báo cáo — kết hợp nhập tay và tự động lấy từ file RSM Night Shift Report (PDF, lọc theo các phòng/nhóm kỹ thuật của Ban BDSC). Dòng tự động lấy từ PDF cũng sửa/xoá được như dòng nhập tay.</p>
+      <form class="entry" id="form-rsm">
+        <label>Tagname<input name="thietBi" list="assets-rsm" autocomplete="off" required><datalist id="assets-rsm"></datalist></label>
+        <label class="half newrow">Vấn đề phát hiện<textarea name="vanDe"></textarea></label>
+        <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
+        <label>Đơn vị thực hiện<input name="donVi"></label>
+        <label>Hạn hoàn thành<input name="thoiHan" type="date"></label>
+        <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
+      </form>
       <div style="overflow-x:auto"><table id="table-rsm"></table></div>
     </section>
 
