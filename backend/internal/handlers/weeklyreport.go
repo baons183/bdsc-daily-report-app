@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
 )
@@ -67,6 +68,9 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cbm := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
+	if excluded, err := db.GetCBMExclusionSet(e.DB); err == nil {
+		cbm = report.FilterCBMExcluded(cbm, excluded)
+	}
 	if cbm == nil {
 		cbm = []models.CBMRow{}
 	}

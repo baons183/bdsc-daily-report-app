@@ -44,6 +44,7 @@ func main() {
 	mux.Handle("GET /api/assets/search", authMw(http.HandlerFunc(env.SearchAssets)))
 	mux.Handle("POST /api/change-password", authMw(http.HandlerFunc(env.ChangePassword)))
 	mux.Handle("GET /api/cbm", authMw(http.HandlerFunc(env.ListCBM)))
+	mux.Handle("POST /api/cbm/exclude", authMw(http.HandlerFunc(env.SetCBMExclusion)))
 	mux.Handle("GET /api/report/view", authMw(http.HandlerFunc(env.GetReportView)))
 	mux.Handle("GET /api/report/weekly", authMw(http.HandlerFunc(env.GetWeeklyReport)))
 

@@ -231,6 +231,22 @@ CREATE TABLE dbo.ReportApprovals (
   ApprovedAt DATETIME NULL,
   UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
+
+-- Alarm rows a user has unticked "đưa vào báo cáo" for in the Giám sát
+-- trực tuyến tab — identified by the same Tagname+Description+DataTime
+-- triple dedupeByTagnameEarliest already collapsed repeats down to (see
+-- models.CBMExclusionKey). A row here is filtered OUT of the actual report
+-- (PDF/email/Thống kê/Báo cáo tuần) but still shown, unchecked, on the raw
+-- CBM tab itself so it can be re-included later.
+IF OBJECT_ID('dbo.CBMExclusions', 'U') IS NULL
+CREATE TABLE dbo.CBMExclusions (
+  Id INT IDENTITY PRIMARY KEY,
+  Tagname NVARCHAR(200) NOT NULL,
+  Description NVARCHAR(500) NOT NULL,
+  DataTime DATETIME NOT NULL,
+  ExcludedBy NVARCHAR(50) NULL,
+  ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
 `
 
 func Migrate(conn *sql.DB) error {

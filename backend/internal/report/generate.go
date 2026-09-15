@@ -63,6 +63,9 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath string, runAt time.Time) (B
 		return BuildInput{}, err
 	}
 	cbm := ReadCBMExcel(cbmExcelPath, start, end)
+	if excluded, err := appdb.GetCBMExclusionSet(db); err == nil {
+		cbm = FilterCBMExcluded(cbm, excluded)
+	}
 
 	reportDate := runAt.AddDate(0, 0, -1).Format("2006-01-02")
 	var reviewedByName, approvedByName sql.NullString

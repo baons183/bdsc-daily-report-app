@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -10,11 +11,22 @@ import (
 	"bdscdailyreport/internal/window"
 )
 
+// cbmRowResp is models.CBMRow plus whether the row is currently ticked
+// "đưa vào báo cáo" — Included is always true unless a user has explicitly
+// unticked this exact row (dbo.CBMExclusions), so the CBM tab can show its
+// checkbox state while report generation (report.FilterCBMExcluded) drops
+// the row entirely.
+type cbmRowResp struct {
+	models.CBMRow
+	Included bool `json:"included"`
+}
+
 // ListCBM shows the exact same rows (filtered to the report window of the
 // given "?date=YYYY-MM-DD", or today if omitted) that would appear in
-// section 3.1 of that day's PDF — read-only, since this data comes entirely
-// from the external online-monitoring system's Excel export, not from
-// anything users enter in this app.
+// section 3.1 of that day's PDF — data itself comes entirely from the
+// external online-monitoring system's Excel export, not anything users
+// enter in this app, but each row's "đưa vào báo cáo" checkbox IS editable
+// here (see SetCBMExclusion).
 func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 	runAt := time.Now()
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
@@ -28,8 +40,45 @@ func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	start, end := window.ReportWindow(runAt, rh, rm)
 	rows := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
-	if rows == nil {
-		rows = []models.CBMRow{}
+	excluded, err := db.GetCBMExclusionSet(e.DB)
+	if err != nil {
+		excluded = map[string]bool{}
 	}
-	writeJSON(w, 200, rows)
+	out := make([]cbmRowResp, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, cbmRowResp{
+			CBMRow:   row,
+			Included: !excluded[models.CBMExclusionKey(row.Tagname, row.Description, row.DataTime)],
+		})
+	}
+	writeJSON(w, 200, out)
+}
+
+type setCBMExclusionReq struct {
+	Tagname     string    `json:"tagname"`
+	Description string    `json:"description"`
+	DataTime    time.Time `json:"dataTime"`
+	Included    bool      `json:"included"`
+}
+
+// SetCBMExclusion lets a user tick/untick whether one specific CBM alarm
+// row is included the next time a report is generated (PDF/email/Thống
+// kê/Báo cáo tuần) — the raw CBM tab itself always lists every row
+// regardless of this setting.
+func (e *Env) SetCBMExclusion(w http.ResponseWriter, r *http.Request) {
+	var in setCBMExclusionReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Tagname == "" {
+		writeErr(w, 400, "du lieu khong hop le")
+		return
+	}
+	user := currentUser(r)
+	updatedBy := ""
+	if user != nil {
+		updatedBy = user.EmployeeCode
+	}
+	if err := db.SetCBMExclusion(e.DB, in.Tagname, in.Description, in.DataTime, !in.Included, updatedBy); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }

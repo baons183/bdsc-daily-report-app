@@ -414,14 +414,33 @@ async function loadCBM() {
   const dateInput = document.getElementById("cbm-date");
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
   const rows = (await api("/api/cbm?date=" + encodeURIComponent(dateInput.value))) || [];
+  window.CBM_ROWS_CACHE = rows;
   const t = document.getElementById("table-cbm");
-  t.innerHTML = "<tr><th>TT</th><th>Thời gian</th><th>Tagname</th><th>Thiết bị</th><th>Mô tả</th><th>Giá trị cảnh báo</th><th>Mức cảnh báo</th></tr>" +
+  t.innerHTML = "<tr><th>TT</th><th>Thời gian</th><th>Tagname</th><th>Thiết bị</th><th>Mô tả</th><th>Giá trị cảnh báo</th><th>Mức cảnh báo</th><th>Đưa vào báo cáo</th></tr>" +
     (rows.length === 0
-      ? '<tr><td colspan="7" style="text-align:center;color:#888">Không có dữ liệu trong khung giờ báo cáo hiện tại</td></tr>'
+      ? '<tr><td colspan="8" style="text-align:center;color:#888">Không có dữ liệu trong khung giờ báo cáo hiện tại</td></tr>'
       : rows.map((r, i) => `<tr>
           <td>${i + 1}</td><td>${fmtDateTime(r.dataTime)}</td><td>${esc(r.tagname)}</td><td>${esc(r.equipment)}</td>
           <td>${esc(r.description)}</td><td>${esc(r.alarmValue)}</td><td>${esc(r.alarmLevel)}</td>
+          <td style="text-align:center"><input type="checkbox" ${r.included ? "checked" : ""} onchange="toggleCBMInclude(${i}, this.checked)"></td>
         </tr>`).join(""));
+}
+// Tick/bỏ tick "Đưa vào báo cáo" cho 1 dòng cụ thể — lưu ngay qua API, ảnh
+// hưởng tới PDF/email/Thống kê/Báo cáo tuần lần sinh báo cáo kế tiếp, chứ
+// không ẩn dòng khỏi tab Giám sát trực tuyến này (vẫn thấy để tick lại được).
+async function toggleCBMInclude(idx, included) {
+  const r = (window.CBM_ROWS_CACHE || [])[idx];
+  if (!r) return;
+  try {
+    await api("/api/cbm/exclude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagname: r.tagname, description: r.description, dataTime: r.dataTime, included }),
+    });
+  } catch (e) {
+    alert("Lỗi: " + e.message);
+    loadCBM();
+  }
 }
 function fmtDateTime(iso) {
   if (!iso) return "";

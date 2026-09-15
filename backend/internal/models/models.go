@@ -93,3 +93,14 @@ type CBMRow struct {
 	AlarmValue  string    `json:"alarmValue"`
 	AlarmLevel  string    `json:"alarmLevel"`
 }
+
+// CBMExclusionKey identifies one deduped CBM alarm row (the same
+// Tagname+Description+DataTime triple dedupeByTagnameEarliest collapses
+// repeats down to) for exclusion purposes — a user unticking "đưa vào báo
+// cáo" in the Giám sát trực tuyến tab records against this key, and report
+// generation filters any row matching a recorded key back out. Shared by
+// internal/db (storage) and internal/report (filtering) so both sides
+// build the exact same string without importing each other.
+func CBMExclusionKey(tagname, description string, dataTime time.Time) string {
+	return tagname + "|" + description + "|" + dataTime.Format("2006-01-02 15:04:05")
+}
