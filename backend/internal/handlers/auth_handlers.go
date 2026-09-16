@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"bdscdailyreport/internal/auth"
 )
@@ -195,4 +196,83 @@ func (e *Env) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, map[string]bool{"ok": true})
+}
+
+type userResp struct {
+	Id           int    `json:"id"`
+	EmployeeCode string `json:"employeeCode"`
+	FullName     string `json:"fullName"`
+	Roles        string `json:"roles"`
+}
+
+// ListUsers returns every account (Admin only) — PasswordHash is never
+// included in the response.
+func (e *Env) ListUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := e.DB.QueryContext(r.Context(),
+		`SELECT Id, EmployeeCode, ISNULL(FullName,''), ISNULL(Roles,'') FROM dbo.Users ORDER BY EmployeeCode`)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	defer rows.Close()
+	out := []userResp{}
+	for rows.Next() {
+		var u userResp
+		if err := rows.Scan(&u.Id, &u.EmployeeCode, &u.FullName, &u.Roles); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		out = append(out, u)
+	}
+	writeJSON(w, 200, out)
+}
+
+type updateUserReq struct {
+	FullName string `json:"fullName"`
+	Roles    string `json:"roles"`
+	Password string `json:"password"` // optional: blank keeps the current password
+}
+
+// UpdateUser lets an Admin edit an existing account's FullName/Roles, and
+// optionally reset its password (leave Password blank to keep the current
+// one). EmployeeCode itself is never editable here — it's the natural key
+// every CreatedBy column across the app (SuCo/GiamSat/CongViec/Reliability)
+// stores directly, so changing it would silently orphan that user's
+// already-saved rows instead of renaming their ownership.
+func (e *Env) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeErr(w, 400, "id khong hop le")
+		return
+	}
+	var in updateUserReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le")
+		return
+	}
+	if in.Password == "" {
+		if _, err := e.DB.ExecContext(r.Context(),
+			`UPDATE dbo.Users SET FullName=?, Roles=? WHERE Id=?`, in.FullName, in.Roles, id); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+		return
+	}
+	if len(in.Password) < 6 {
+		writeErr(w, 400, "mat khau moi phai co it nhat 6 ky tu")
+		return
+	}
+	hash, err := auth.HashPassword(in.Password)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(),
+		`UPDATE dbo.Users SET FullName=?, Roles=?, PasswordHash=? WHERE Id=?`, in.FullName, in.Roles, hash, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }
