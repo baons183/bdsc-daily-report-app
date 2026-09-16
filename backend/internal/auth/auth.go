@@ -84,9 +84,19 @@ func FromContext(ctx context.Context) *Claims {
 	return c
 }
 
+// HasRole reports whether roles (comma-separated) satisfies role. Admin
+// always passes every check. Approver is treated as equal to Admin
+// everywhere EXCEPT the Admin-only routes/panel themselves (role=="Admin")
+// — so an Approver-only user passes every other role gate (SuCo, GiamSat,
+// CongViec, KPI, Moderator...) the same way Admin does, but still can't
+// reach the Quản trị tab or its APIs.
 func HasRole(roles, role string) bool {
 	for _, r := range strings.Split(roles, ",") {
-		if strings.TrimSpace(r) == role || strings.TrimSpace(r) == "Admin" {
+		r = strings.TrimSpace(r)
+		if r == role || r == "Admin" {
+			return true
+		}
+		if r == "Approver" && role != "Admin" {
 			return true
 		}
 	}

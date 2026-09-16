@@ -14,18 +14,19 @@ import (
 )
 
 // canTouchReliability allows editing/deleting a row if the caller is
-// Admin, the row's own creator, OR the row has no personal creator at all
-// (CreatedBy == "" — auto-imported from the RSM PDF, see
-// report.SyncReliabilityFromRSM) — an auto-imported row belongs to the
-// team, not to one person, so anyone holding the role that can see this
-// tab may edit or delete it, same as they could a colleague's manually
-// typed row via checkEditOwnership elsewhere.
+// Admin, Approver (treated as equal to Admin everywhere except the Quản
+// trị tab/APIs — see auth.HasRole), the row's own creator, OR the row has
+// no personal creator at all (CreatedBy == "" — auto-imported from the RSM
+// PDF, see report.SyncReliabilityFromRSM) — an auto-imported row belongs to
+// the team, not to one person, so anyone holding the role that can see
+// this tab may edit or delete it, same as they could a colleague's
+// manually typed row via checkEditOwnership elsewhere.
 func canTouchReliability(r *http.Request, createdBy string) bool {
 	claims := currentUser(r)
 	if claims == nil {
 		return false
 	}
-	return auth.HasRole(claims.Roles, "Admin") || createdBy == "" || claims.EmployeeCode == createdBy
+	return auth.HasRole(claims.Roles, "Admin") || auth.HasRole(claims.Roles, "Approver") || createdBy == "" || claims.EmployeeCode == createdBy
 }
 
 // ListReliability uses the exact same "today's currently open window"

@@ -67,15 +67,16 @@ func currentUser(r *http.Request) *auth.Claims {
 }
 
 // checkOwnership refuses the request (writing a 403) unless the caller is
-// either an Admin or the original creator of the row. Every delete handler
-// must call this before touching the row.
+// Admin, Approver (treated as equal to Admin everywhere except the Quản
+// trị tab/APIs themselves — see auth.HasRole), or the original creator of
+// the row. Every delete handler must call this before touching the row.
 func checkOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bool {
 	claims := currentUser(r)
 	if claims == nil {
 		writeErr(w, 401, "chua dang nhap")
 		return false
 	}
-	if auth.HasRole(claims.Roles, "Admin") || claims.EmployeeCode == createdBy {
+	if auth.HasRole(claims.Roles, "Admin") || auth.HasRole(claims.Roles, "Approver") || claims.EmployeeCode == createdBy {
 		return true
 	}
 	writeErr(w, 403, "ban khong co quyen sua/xoa du lieu cua nguoi khac")
@@ -86,6 +87,9 @@ func checkOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bo
 // role, which may edit anyone's row but must never be able to delete one —
 // checkOwnership (used by every Delete handler) deliberately does not grant
 // Moderator that bypass. Every Update handler calls this one instead.
+// (Approver already passes the Moderator check below via auth.HasRole's own
+// Approver-equals-Admin-except-Admin-itself rule, so no separate check is
+// needed here.)
 func checkEditOwnership(w http.ResponseWriter, r *http.Request, createdBy string) bool {
 	claims := currentUser(r)
 	if claims == nil {
@@ -100,14 +104,15 @@ func checkEditOwnership(w http.ResponseWriter, r *http.Request, createdBy string
 }
 
 // checkNotLocked refuses the request (writing a 423 Locked) unless the
-// caller is Admin, or the report that entryTime's row belongs to
-// (window.ReportDateForEntry) is still in "draft" status. Every
+// caller is Admin or Approver, or the report that entryTime's row belongs
+// to (window.ReportDateForEntry) is still in "draft" status. Every
 // Create/Update/Delete handler for SuCo/GiamSat/CongViec calls this — once
-// a report is "reviewed" or "approved", nobody but Admin can touch its
-// data anymore (an Approver rejecting is what reopens it).
+// a report is "reviewed" or "approved", nobody but Admin/Approver can touch
+// its data anymore (an Approver rejecting is what reopens it for everyone
+// else).
 func checkNotLocked(w http.ResponseWriter, r *http.Request, db *sql.DB, entryTime time.Time) bool {
 	claims := currentUser(r)
-	if claims != nil && auth.HasRole(claims.Roles, "Admin") {
+	if claims != nil && (auth.HasRole(claims.Roles, "Admin") || auth.HasRole(claims.Roles, "Approver")) {
 		return true
 	}
 	rh, rm := appdb.ReportTime(db, 8, 0)
