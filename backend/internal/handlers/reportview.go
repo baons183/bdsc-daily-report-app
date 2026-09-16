@@ -16,6 +16,7 @@ type reportImage struct {
 
 type reportViewResponse struct {
 	RunAt       string               `json:"runAt"`
+	ReportDate  string               `json:"reportDate"`
 	Start       string               `json:"start"`
 	End         string               `json:"end"`
 	KPI         []models.KPIEntry    `json:"kpi"`
@@ -78,6 +79,7 @@ func (e *Env) GetReportView(w http.ResponseWriter, r *http.Request) {
 	dispStart, dispEnd := window.DisplayBounds(data.Start, data.End, data.ReportHour, data.ReportMinute)
 	writeJSON(w, 200, reportViewResponse{
 		RunAt:       reportDate.Format("02/01/2006"),
+		ReportDate:  reportDate.Format("2006-01-02"),
 		Start:       dispStart.Format("15:04 02/01/2006"),
 		End:         dispEnd.Format("15:04 02/01/2006"),
 		KPI:         data.KPI,

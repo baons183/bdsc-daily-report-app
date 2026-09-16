@@ -533,6 +533,12 @@ async function initThongKe() {
   return loadThongKe();
 }
 
+// Ngày báo cáo thực sự đang hiển thị (vd "2026-09-15") - LUÔN lệch 1 ngày
+// so với ô "Chọn ngày" (vốn là ngày cửa sổ ĐÓNG, không phải ngày báo cáo -
+// xem GetReportView). Nút Kiểm tra/Phê duyệt/Reject phải dùng đúng giá trị
+// này (server trả về sẵn qua d.reportDate) thay vì đọc thẳng ô ngày, nếu
+// không sẽ đánh dấu nhầm sang ngày hôm sau (cửa sổ chưa đóng).
+let THONGKE_REPORT_DATE = "";
 async function loadThongKe() {
   const date = document.getElementById("thongke-date").value;
   const content = document.getElementById("thongke-content");
@@ -544,6 +550,7 @@ async function loadThongKe() {
     content.innerHTML = "Lỗi: " + e.message;
     return;
   }
+  THONGKE_REPORT_DATE = data.reportDate;
   content.innerHTML = renderReportView(data);
 }
 
@@ -718,7 +725,7 @@ function renderApprovalBlock(a) {
   `;
 }
 async function doReviewReport() {
-  const date = document.getElementById("thongke-date").value;
+  const date = THONGKE_REPORT_DATE;
   if (!confirm("Xác nhận Kiểm tra báo cáo ngày " + date + "? Sau khi Kiểm tra, dữ liệu ngày này sẽ bị khoá không sửa được nữa (trừ Admin).")) return;
   try {
     await api("/api/report-approval/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
@@ -726,7 +733,7 @@ async function doReviewReport() {
   loadThongKe();
 }
 async function doApproveReport() {
-  const date = document.getElementById("thongke-date").value;
+  const date = THONGKE_REPORT_DATE;
   if (!confirm("Xác nhận Phê duyệt báo cáo ngày " + date + "?")) return;
   try {
     await api("/api/report-approval/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
@@ -734,7 +741,7 @@ async function doApproveReport() {
   loadThongKe();
 }
 async function doRejectReport() {
-  const date = document.getElementById("thongke-date").value;
+  const date = THONGKE_REPORT_DATE;
   if (!confirm("Reject báo cáo ngày " + date + "? Dữ liệu sẽ mở lại để sửa như ban đầu.")) return;
   try {
     await api("/api/report-approval/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) });
