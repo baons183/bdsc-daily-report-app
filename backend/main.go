@@ -36,13 +36,11 @@ func main() {
 
 	// public
 	mux.HandleFunc("POST /api/login", env.Login(cfg.JWTSecret))
-	mux.HandleFunc("POST /api/setup/first-admin", env.BootstrapFirstAdmin)
 	mux.HandleFunc("POST /api/register", env.RegisterViewer)
 
 	// authenticated
 	authMw := auth.Middleware(cfg.JWTSecret)
 	mux.Handle("GET /api/assets/search", authMw(http.HandlerFunc(env.SearchAssets)))
-	mux.Handle("POST /api/change-password", authMw(http.HandlerFunc(env.ChangePassword)))
 	mux.Handle("GET /api/cbm", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.ListCBM))))
 	mux.Handle("POST /api/cbm/exclude", authMw(http.HandlerFunc(env.SetCBMExclusion)))
 	mux.Handle("GET /api/report/view", authMw(http.HandlerFunc(env.GetReportView)))
@@ -72,7 +70,7 @@ func main() {
 
 	mux.Handle("GET /api/users", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.ListUsers))))
 	mux.Handle("POST /api/users", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.CreateUser))))
-	mux.Handle("PUT /api/users/{id}", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.UpdateUser))))
+	mux.Handle("PUT /api/users/{employeeCode}", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.UpdateUser))))
 
 	mux.Handle("GET /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.ListScheduleOverrides))))
 	mux.Handle("POST /api/schedule-overrides", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.AddScheduleOverride))))

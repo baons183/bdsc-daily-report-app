@@ -109,75 +109,36 @@ function logout() {
 
 function openRegister() {
   document.getElementById("regCode").value = "";
-  document.getElementById("regName").value = "";
   document.getElementById("regPw").value = "";
-  document.getElementById("regPw2").value = "";
   document.getElementById("regErr").textContent = "";
   document.getElementById("registerModal").hidden = false;
 }
 function closeRegister() {
   document.getElementById("registerModal").hidden = true;
 }
+// "Đăng ký" no longer creates a new account/password - it verifies the
+// caller's EXISTING Maintenance Report App/Checksheet credentials and grants
+// Viewer access to this app if they don't have a role here yet (see
+// RegisterViewer in auth_handlers.go).
 async function submitRegister() {
   const employeeCode = document.getElementById("regCode").value.trim();
-  const fullName = document.getElementById("regName").value.trim();
   const password = document.getElementById("regPw").value;
-  const password2 = document.getElementById("regPw2").value;
   const errBox = document.getElementById("regErr");
   errBox.textContent = "";
   if (!employeeCode || !password) { errBox.textContent = "Vui lòng nhập đủ Mã nhân viên/Mật khẩu."; return; }
-  if (password !== password2) { errBox.textContent = "Mật khẩu nhập lại không khớp."; return; }
   try {
     await api("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeCode, password, fullName }),
+      body: JSON.stringify({ employeeCode, password }),
     });
   } catch (e) {
     errBox.textContent = "Lỗi: " + e.message;
     return;
   }
   closeRegister();
-  alert("Đăng ký thành công. Vui lòng đăng nhập.");
+  alert("Đã cấp quyền dùng app. Vui lòng đăng nhập.");
   document.getElementById("loginCode").value = employeeCode;
-}
-
-function openChangePassword() {
-  document.getElementById("cpOld").value = "";
-  document.getElementById("cpNew").value = "";
-  document.getElementById("cpNew2").value = "";
-  document.getElementById("cpErr").textContent = "";
-  document.getElementById("changePwModal").hidden = false;
-}
-function closeChangePassword() {
-  document.getElementById("changePwModal").hidden = true;
-}
-async function submitChangePassword() {
-  const oldPassword = document.getElementById("cpOld").value;
-  const newPassword = document.getElementById("cpNew").value;
-  const newPassword2 = document.getElementById("cpNew2").value;
-  const errBox = document.getElementById("cpErr");
-  errBox.textContent = "";
-  if (!oldPassword || !newPassword) {
-    errBox.textContent = "Vui lòng nhập đủ thông tin.";
-    return;
-  }
-  if (newPassword !== newPassword2) {
-    errBox.textContent = "Mật khẩu mới nhập lại không khớp.";
-    return;
-  }
-  try {
-    await api("/api/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ oldPassword, newPassword }),
-    });
-    closeChangePassword();
-    alert("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
-    logout();
-  } catch (e) {
-    errBox.textContent = "Lỗi: " + e.message;
-  }
 }
 
 function showApp() {
@@ -998,17 +959,15 @@ function renderUsersList() {
       ? '<tr><td colspan="4" style="text-align:center;color:#888">Không tìm thấy user nào</td></tr>'
       : rows.map(u => `<tr>
           <td>${esc(u.employeeCode)}</td><td>${esc(u.fullName)}</td><td>${esc(u.roles)}</td>
-          <td><button class="btn" style="margin-top:0" onclick="openEditUser(${u.id})">Sửa</button></td>
+          <td><button class="btn" style="margin-top:0" onclick="openEditUser('${esc(u.employeeCode)}')">Sửa</button></td>
         </tr>`).join(""));
 }
-function openEditUser(id) {
-  const u = USERS_CACHE.find(x => x.id === id);
+function openEditUser(employeeCode) {
+  const u = USERS_CACHE.find(x => x.employeeCode === employeeCode);
   if (!u) return;
-  document.getElementById("editUserModal").dataset.userId = id;
+  document.getElementById("editUserModal").dataset.employeeCode = employeeCode;
   document.getElementById("editUserCode").textContent = u.employeeCode;
-  document.getElementById("editUserFullName").value = u.fullName;
   document.getElementById("editUserRoles").value = u.roles;
-  document.getElementById("editUserPassword").value = "";
   document.getElementById("editUserErr").textContent = "";
   document.getElementById("editUserModal").hidden = false;
 }
@@ -1016,17 +975,15 @@ function closeEditUser() {
   document.getElementById("editUserModal").hidden = true;
 }
 async function submitEditUser() {
-  const id = document.getElementById("editUserModal").dataset.userId;
-  const fullName = document.getElementById("editUserFullName").value.trim();
+  const employeeCode = document.getElementById("editUserModal").dataset.employeeCode;
   const roles = document.getElementById("editUserRoles").value.trim();
-  const password = document.getElementById("editUserPassword").value;
   const errBox = document.getElementById("editUserErr");
   errBox.textContent = "";
   try {
-    await api("/api/users/" + id, {
+    await api("/api/users/" + encodeURIComponent(employeeCode), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName, roles, password }),
+      body: JSON.stringify({ roles }),
     });
   } catch (e) {
     errBox.textContent = "Lỗi: " + e.message;

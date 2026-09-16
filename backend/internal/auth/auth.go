@@ -2,12 +2,16 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 type ctxKey string
@@ -21,6 +25,9 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// Legacy bcrypt helpers — no longer used to create/verify credentials (see
+// VerifySharedPassword below), kept only in case a historical dbo.Users row
+// is ever inspected manually.
 func HashPassword(pw string) (string, error) {
 	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(b), err
@@ -28,6 +35,19 @@ func HashPassword(pw string) (string, error) {
 
 func CheckPassword(hash, pw string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
+}
+
+// VerifySharedPassword checks a password against MaintenanceUserAccount's
+// PasswordSalt/PasswordHash (PBKDF2-HMAC-SHA256, 100000 iterations, 32-byte
+// digest hex-encoded) — must match backend/app/services/password_service.py
+// in MaintenanceReportApp exactly, since accounts are now created/managed
+// there (and in checksheet-app's own equivalent), not by this app. The salt
+// is used as its own UTF-8 bytes (the hex string itself), not hex-decoded —
+// same as the Python side's `salt.encode("utf-8")`.
+func VerifySharedPassword(password, salt, storedHashHex string) bool {
+	dk := pbkdf2.Key([]byte(password), []byte(salt), 100000, sha256.Size, sha256.New)
+	computed := hex.EncodeToString(dk)
+	return subtle.ConstantTimeCompare([]byte(computed), []byte(storedHashHex)) == 1
 }
 
 func IssueToken(secret, employeeCode, fullName, roles string) (string, error) {
