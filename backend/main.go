@@ -277,18 +277,35 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ?`,
 	return nil
 }
 
-// scheduleApprovalDeadlines polls every 20s for whether "now" matches
+// pastCutoff reports whether now's time-of-day is at or after hour:minute
+// on now's own calendar date.
+func pastCutoff(now time.Time, hour, minute int) bool {
+	c := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+	return !now.Before(c)
+}
+
+// scheduleApprovalDeadlines polls every 20s for whether "now" is at or past
 // either of the Admin-configured Kiểm tra/Phê duyệt deadline times
-// (env.EffectiveApprovalSchedule). If the Kiểm tra deadline passes and
-// nobody has reviewed the currently-active report yet (still "draft"), it
-// auto-performs Kiểm tra as BS00444 (locking the data) and emails the
-// Approvers. If the Phê duyệt deadline passes and nobody has approved yet
-// (still "reviewed"), it auto-fills Phê duyệt as BS00742. Both fallback
-// employee codes were given explicitly by the user rather than picked by
-// this code. window.CurrentReportDate resolves "which printed report is
+// (env.EffectiveApprovalSchedule) — deliberately "at/past", not "exactly
+// at", the deadline minute: an earlier exact-minute-match version silently
+// missed the whole day whenever the app wasn't up during that exact 60s
+// window (a machine reboot, a crash, anything delaying startup past the
+// deadline), since it never got a 2nd chance until the same time the next
+// day. "Past cutoff" instead fires on the very first tick after startup
+// that's already overdue, catching up immediately instead of waiting a
+// full day. If the Kiểm tra deadline has passed and nobody has reviewed
+// the currently-active report yet (still "draft"), it auto-performs Kiểm
+// tra as BS00444 (locking the data) and emails the Approvers. If the Phê
+// duyệt deadline has passed and nobody has approved yet (still
+// "reviewed"), it auto-fills Phê duyệt as BS00742. Both fallback employee
+// codes were given explicitly by the user rather than picked by this
+// code. window.CurrentReportDate resolves "which printed report is
 // currently up for review" at wall-clock time now — NOT the same date
 // window.ReportDateForEntry would give a row entered at this same moment
-// (see internal/window/window.go for the distinction).
+// (see internal/window/window.go for the distinction). The
+// reportDate != lastReviewDate/lastApproveDate guards still ensure each
+// report date is only auto-handled once, no matter how many ticks land
+// after its deadline.
 func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 	const autoReviewerCode = "BS00444"
 	const autoApproverCode = "BS00742"
@@ -301,7 +318,7 @@ func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 		rh, rm := db.ReportTime(conn, 8, 0)
 		reportDate := window.CurrentReportDate(now, rh, rm).Format("2006-01-02")
 
-		if now.Hour() == kh && now.Minute() == km && reportDate != lastReviewDate {
+		if pastCutoff(now, kh, km) && reportDate != lastReviewDate {
 			lastReviewDate = reportDate
 			status, err := currentApprovalStatus(conn, reportDate)
 			if err != nil {
@@ -320,7 +337,7 @@ func scheduleApprovalDeadlines(conn *sql.DB, env *handlers.Env) {
 			}
 		}
 
-		if now.Hour() == ph && now.Minute() == pm && reportDate != lastApproveDate {
+		if pastCutoff(now, ph, pm) && reportDate != lastApproveDate {
 			lastApproveDate = reportDate
 			status, err := currentApprovalStatus(conn, reportDate)
 			if err != nil {
