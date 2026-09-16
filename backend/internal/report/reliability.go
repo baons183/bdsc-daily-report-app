@@ -14,10 +14,13 @@ import (
 // đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị") for the window
 // [start, end] — a mix of rows a user typed in by hand and rows
 // SyncReliabilityFromRSM auto-imported, indistinguishable once saved.
+// Newest-added row first (ORDER BY Id DESC) — TT is then renumbered
+// in-memory (1..N in that display order), same as FetchSuCo/FetchGiamSat/
+// FetchCongViec; the stored TT value in the DB is untouched.
 func FetchReliability(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.Reliability, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
 	}
@@ -29,6 +32,9 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, win
 			return nil, err
 		}
 		out = append(out, r)
+	}
+	for i := range out {
+		out[i].TT = i + 1
 	}
 	return out, nil
 }

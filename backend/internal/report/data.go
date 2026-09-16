@@ -12,12 +12,15 @@ import (
 
 // FetchSuCo returns every dbo.SuCo row whose NgayBaoCao falls in
 // [start, end] — exported so both report generation and the "Báo cáo tuần"
-// tab can share the same query.
+// tab can share the same query. Newest-added row first (ORDER BY Id DESC)
+// — TT is then renumbered in-memory (1..N in that display order) so it
+// still reads as a clean top-down sequence rather than the row's original
+// creation-order stamp; the stored TT value in the DB is untouched.
 func FetchSuCo(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.SuCo, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
 	}
@@ -31,17 +34,21 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL
 		}
 		out = append(out, s)
 	}
+	for i := range out {
+		out[i].TT = i + 1
+	}
 	return out, nil
 }
 
 // FetchGiamSat returns every dbo.GiamSat row whose NgayBaoCao falls in
 // [start, end] — exported so both report generation and the "Báo cáo tuần"
-// tab can share the same query.
+// tab can share the same query. Newest-added row first — see FetchSuCo's
+// comment on the ORDER BY Id DESC + in-memory TT renumbering.
 func FetchGiamSat(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.GiamSat, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ISNULL(RuiRo,''),
        ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
 	}
@@ -55,17 +62,22 @@ FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.
 		}
 		out = append(out, s)
 	}
+	for i := range out {
+		out[i].TT = i + 1
+	}
 	return out, nil
 }
 
 // FetchCongViec returns every dbo.CongViec row (with attachments) whose
 // NgayBaoCao falls in [start, end] — exported so both report generation
-// and the "Báo cáo tuần" tab can share the same query.
+// and the "Báo cáo tuần" tab can share the same query. Newest-added row
+// first — see FetchSuCo's comment on the ORDER BY Id DESC + in-memory TT
+// renumbering.
 func FetchCongViec(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.CongViec, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(NoiDung,''), ISNULL(KeHoach,''), TienDo,
        ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +90,9 @@ FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window
 			return nil, err
 		}
 		out = append(out, c)
+	}
+	for i := range out {
+		out[i].TT = i + 1
 	}
 	for i := range out {
 		aRows, err := db.QueryContext(ctx, `SELECT Id, CongViecId, FileName, FilePath, ISNULL(ContentType,'') FROM dbo.CongViecAttachments WHERE CongViecId = ?`, out[i].Id)

@@ -25,24 +25,10 @@ func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 	reportDate := window.ReportDateForEntry(now, rh, rm)
 	report.SyncSuCoFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 
-	rows, err := e.DB.QueryContext(r.Context(), `
-SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
-       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+	out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
-	}
-	defer rows.Close()
-	out := []models.SuCo{}
-	for rows.Next() {
-		var s models.SuCo
-		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.LoaiSuCo, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
-			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		out = append(out, s)
 	}
 	writeJSON(w, 200, out)
 }

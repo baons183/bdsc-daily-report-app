@@ -13,34 +13,17 @@ import (
 
 	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
+	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
 )
 
 func (e *Env) ListCongViec(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	start, end := window.EntryWindow(time.Now(), rh, rm)
-	rows, err := e.DB.QueryContext(r.Context(), `
-SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(NoiDung,''), ISNULL(KeHoach,''), TienDo,
-       ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+	out, err := report.FetchCongViec(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
-	}
-	defer rows.Close()
-	out := []models.CongViec{}
-	for rows.Next() {
-		var c models.CongViec
-		if err := rows.Scan(&c.Id, &c.TT, &c.ThietBi, &c.DM, &c.NoiDung, &c.KeHoach, &c.TienDo,
-			&c.HomNay, &c.NgayMai, &c.DeXuat, &c.LuuY, &c.NgayBaoCao, &c.CreatedBy); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		out = append(out, c)
-	}
-	// attach photos
-	for i := range out {
-		out[i].Attachments = e.loadAttachments(r, out[i].Id)
 	}
 	writeJSON(w, 200, out)
 }

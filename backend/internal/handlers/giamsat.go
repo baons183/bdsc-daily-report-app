@@ -8,30 +8,17 @@ import (
 
 	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
+	"bdscdailyreport/internal/report"
 	"bdscdailyreport/internal/window"
 )
 
 func (e *Env) ListGiamSat(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	start, end := window.EntryWindow(time.Now(), rh, rm)
-	rows, err := e.DB.QueryContext(r.Context(), `
-SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ISNULL(RuiRo,''),
-       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
-FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY TT`, window.SQL(start), window.SQL(end))
+	out, err := report.FetchGiamSat(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
-	}
-	defer rows.Close()
-	out := []models.GiamSat{}
-	for rows.Next() {
-		var s models.GiamSat
-		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.TinhTrang, &s.RuiRo,
-			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		out = append(out, s)
 	}
 	writeJSON(w, 200, out)
 }
