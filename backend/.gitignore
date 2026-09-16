@@ -13,3 +13,6 @@
 # Editor/OS cruft
 .vscode/
 Thumbs.db
+
+# Node deps for scripts/backup-mirror-to-99937.mjs
+scripts/node_modules/
