@@ -22,9 +22,9 @@ let EMPCODE = localStorage.getItem("bdsc_empcode") || "";
 function canEdit(createdBy) {
   return hasRole("Admin") || hasRole("Moderator") || createdBy === EMPCODE;
 }
-// Xóa: chỉ chính chủ hoặc Admin — khớp checkOwnership phía server.
+// Xóa: chỉ chính chủ, Admin, hoặc Approver — khớp checkOwnership phía server.
 function canDelete(createdBy) {
-  return hasRole("Admin") || createdBy === EMPCODE;
+  return hasRole("Admin") || hasRole("Approver") || createdBy === EMPCODE;
 }
 
 // Ô Thiết bị dạng select có gõ-tìm (input + <datalist>, trình duyệt tự vẽ
@@ -51,8 +51,12 @@ function attachAssetAutocomplete(formEl) {
   });
 }
 
+// Khớp đúng auth.HasRole phía server: Admin luôn qua; Approver ngang Admin
+// ở MỌI role khác, trừ chính "Admin" (không vào được tab/API Quản trị).
 function hasRole(r) {
-  return ROLES.split(",").map(s => s.trim()).includes(r) || ROLES.includes("Admin");
+  const roles = ROLES.split(",").map(s => s.trim());
+  if (roles.includes(r) || roles.includes("Admin")) return true;
+  return r !== "Admin" && roles.includes("Approver");
 }
 function hasAnyRole(roles) {
   return roles.some(hasRole);
@@ -185,9 +189,9 @@ function showApp() {
 
 const TAB_DEFS = [
   { id: "kpi", label: "KPI - Sự cố", role: ["KPI", "SuCo", "Moderator"] },
-  { id: "giamsat", label: "Giám sát/Chẩn đoán", role: ["GiamSat", "Moderator"] },
   { id: "congviec", label: "Công việc", role: ["CongViec", "Moderator"] },
-  { id: "cbm", label: "Giám sát trực tuyến", role: null },
+  { id: "giamsat", label: "Giám sát/Chẩn đoán", role: ["GiamSat", "Moderator"] },
+  { id: "cbm", label: "Giám sát trực tuyến", role: "GiamSat" },
   { id: "rsm", label: "Reliability", role: ["GiamSat", "Moderator"] },
   { id: "thongke", label: "Báo cáo ngày", role: null },
   { id: "weekly", label: "Báo cáo tuần", role: null },
@@ -195,10 +199,9 @@ const TAB_DEFS = [
 ];
 
 // Tài khoản tự đăng ký chỉ có duy nhất role "Viewer" - chỉ được xem 2 tab
-// nay, du cac tab khac (VD Giam sat truc tuyen) co role: null (nghia la
-// "ai dang nhap cung xem duoc") vi cac role thao tac (SuCo, GiamSat...) van
-// dung role: null cho CBM voi y dinh "ai cung xem duoc", rieng Viewer thi
-// khong.
+// nay, du cac tab khac co role: null (nghia la "ai dang nhap cung xem
+// duoc", vd Bao cao ngay/Bao cao tuan) vi Viewer thi khong duoc tinh la
+// "ai cung xem duoc" nhu cac role thao tac khac.
 const VIEWER_ONLY_TABS = ["thongke", "weekly"];
 function isViewerOnly() {
   const roles = ROLES.split(",").map(s => s.trim()).filter(Boolean);
@@ -411,11 +414,19 @@ document.getElementById("form-congviec").addEventListener("submit", async e => {
 
 
 // ---- Giám sát trực tuyến (CBM) — chỉ xem, dữ liệu tự động từ hệ thống ngoài ----
+// Chỉ GiamSat/Moderator/Approver/Admin mới được tick "Đưa vào báo cáo" —
+// khớp đúng luật phía server (SetCBMExclusion), tab CBM thì ai đăng nhập
+// cũng xem được (role: null) nhưng quyết định dữ liệu nào vào báo cáo thật
+// thì không phải hành động chỉ-xem.
+function canToggleCBMInclude() {
+  return hasRole("GiamSat") || hasRole("Moderator") || hasRole("Approver");
+}
 async function loadCBM() {
   const dateInput = document.getElementById("cbm-date");
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
   const rows = (await api("/api/cbm?date=" + encodeURIComponent(dateInput.value))) || [];
   window.CBM_ROWS_CACHE = rows;
+  const canToggle = canToggleCBMInclude();
   const t = document.getElementById("table-cbm");
   t.innerHTML = "<tr><th>TT</th><th>Thời gian</th><th>Tagname</th><th>Thiết bị</th><th>Mô tả</th><th>Giá trị cảnh báo</th><th>Mức cảnh báo</th><th>Đưa vào báo cáo</th></tr>" +
     (rows.length === 0
@@ -423,7 +434,7 @@ async function loadCBM() {
       : rows.map((r, i) => `<tr>
           <td>${i + 1}</td><td>${fmtDateTime(r.dataTime)}</td><td>${esc(r.tagname)}</td><td>${esc(r.equipment)}</td>
           <td>${esc(r.description)}</td><td>${esc(r.alarmValue)}</td><td>${esc(r.alarmLevel)}</td>
-          <td style="text-align:center"><input type="checkbox" ${r.included ? "checked" : ""} onchange="toggleCBMInclude(${i}, this.checked)"></td>
+          <td style="text-align:center"><input type="checkbox" ${r.included ? "checked" : ""} ${canToggle ? "" : "disabled"} onchange="toggleCBMInclude(${i}, this.checked)"></td>
         </tr>`).join(""));
 }
 // Tick/bỏ tick "Đưa vào báo cáo" cho 1 dòng cụ thể — lưu ngay qua API, ảnh
@@ -458,11 +469,14 @@ function fmtDateTime(iso) {
 // không còn cơ chế tick "đưa vào báo cáo" riêng nữa (xoá dòng là cách
 // duy nhất để bỏ nó khỏi báo cáo).
 async function initRSMReview() {
+  const dateInput = document.getElementById("rsm-date");
+  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
   return loadRSMReview();
 }
 async function loadRSMReview() {
   document.getElementById("form-rsm").hidden = !hasRole("GiamSat");
-  const rows = (await api("/api/reliability")) || [];
+  const date = document.getElementById("rsm-date").value;
+  const rows = (await api("/api/reliability?date=" + encodeURIComponent(date))) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-rsm");
   t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th></th></tr>" +
@@ -477,7 +491,7 @@ async function loadRSMReview() {
 // khác chỉ cho chính chủ hoặc Moderator/Admin (khớp canTouchReliability
 // phía server).
 function canEditReliability(createdBy) {
-  return hasRole("Admin") || createdBy === "" || createdBy === EMPCODE;
+  return hasRole("Admin") || hasRole("Approver") || createdBy === "" || createdBy === EMPCODE;
 }
 function reliabilityActionButtons(r) {
   if (!canEditReliability(r.createdBy)) return "";
@@ -503,6 +517,10 @@ document.getElementById("form-rsm").addEventListener("submit", async e => {
   } else {
     await api("/api/reliability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     form.reset();
+    // Dòng mới luôn thuộc cửa sổ "hôm nay" (server dùng window.EntryWindow),
+    // bất kể đang lọc xem ngày nào - nhảy bộ lọc về hôm nay để dòng vừa
+    // thêm hiện ra ngay, thay vì "biến mất" nếu đang xem 1 ngày cũ.
+    document.getElementById("rsm-date").value = new Date().toISOString().slice(0, 10);
   }
   loadRSMReview();
 });
@@ -613,13 +631,13 @@ function renderWeeklyReport(d) {
         <tr>${cbmLevelKeys.map(k => `<td>${cbmByLevel[k]}</td>`).join("")}</tr>
       </table>` : ""}
 
-      <div class="rv-heading">Giám sát trực tuyến (online monitoring)</div>
+      <div class="rv-heading">GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
 
-      <div class="rv-heading">Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường</div>
+      <div class="rv-heading">GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
 
-      <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ</div>
+      <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
       ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
 
       <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
@@ -754,11 +772,11 @@ function renderReportView(d) {
       </table>
 
       <div class="rv-heading">2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
-      <div class="rv-sub">2.1. Giám sát trực tuyến (online monitoring)</div>
+      <div class="rv-sub">2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
-      <div class="rv-sub">2.2. Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường</div>
+      <div class="rv-sub">2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
-      <div class="rv-sub">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ</div>
+      <div class="rv-sub">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
       ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
 
       <div class="rv-heading">3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
@@ -890,10 +908,69 @@ document.getElementById("form-user").addEventListener("submit", async e => {
   await api("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   e.target.reset();
   alert("Đã tạo tài khoản.");
+  loadUsersList();
 });
 
 async function loadAdminPanel() {
-  await Promise.all([loadReportSchedule(), loadCBMExcelPath(), loadRSMPdfFolder(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline(), loadApprovalSchedule()]);
+  await Promise.all([loadUsersList(), loadReportSchedule(), loadCBMExcelPath(), loadRSMPdfFolder(), loadSendAllDays(), loadScheduleOverrides(), loadKPIBaseline(), loadApprovalSchedule()]);
+}
+
+// ---- Danh sách user / sửa thông tin (kể cả role) ----
+let USERS_CACHE = [];
+async function loadUsersList() {
+  USERS_CACHE = (await api("/api/users")) || [];
+  renderUsersList();
+}
+// Lọc client-side theo mã NV/họ tên/quyền — danh sách user hiếm khi lớn tới
+// mức cần gọi lại API mỗi lần gõ, nên lọc thẳng trên USERS_CACHE đã tải.
+function renderUsersList() {
+  const q = (document.getElementById("userSearch").value || "").trim().toLowerCase();
+  const rows = !q ? USERS_CACHE : USERS_CACHE.filter(u =>
+    (u.employeeCode || "").toLowerCase().includes(q) ||
+    (u.fullName || "").toLowerCase().includes(q) ||
+    (u.roles || "").toLowerCase().includes(q));
+  const t = document.getElementById("table-users");
+  t.innerHTML = "<tr><th>Mã NV</th><th>Họ tên</th><th>Quyền</th><th></th></tr>" +
+    (rows.length === 0
+      ? '<tr><td colspan="4" style="text-align:center;color:#888">Không tìm thấy user nào</td></tr>'
+      : rows.map(u => `<tr>
+          <td>${esc(u.employeeCode)}</td><td>${esc(u.fullName)}</td><td>${esc(u.roles)}</td>
+          <td><button class="btn" style="margin-top:0" onclick="openEditUser(${u.id})">Sửa</button></td>
+        </tr>`).join(""));
+}
+function openEditUser(id) {
+  const u = USERS_CACHE.find(x => x.id === id);
+  if (!u) return;
+  document.getElementById("editUserModal").dataset.userId = id;
+  document.getElementById("editUserCode").textContent = u.employeeCode;
+  document.getElementById("editUserFullName").value = u.fullName;
+  document.getElementById("editUserRoles").value = u.roles;
+  document.getElementById("editUserPassword").value = "";
+  document.getElementById("editUserErr").textContent = "";
+  document.getElementById("editUserModal").hidden = false;
+}
+function closeEditUser() {
+  document.getElementById("editUserModal").hidden = true;
+}
+async function submitEditUser() {
+  const id = document.getElementById("editUserModal").dataset.userId;
+  const fullName = document.getElementById("editUserFullName").value.trim();
+  const roles = document.getElementById("editUserRoles").value.trim();
+  const password = document.getElementById("editUserPassword").value;
+  const errBox = document.getElementById("editUserErr");
+  errBox.textContent = "";
+  try {
+    await api("/api/users/" + id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fullName, roles, password }),
+    });
+  } catch (e) {
+    errBox.textContent = "Lỗi: " + e.message;
+    return;
+  }
+  closeEditUser();
+  loadUsersList();
 }
 
 // ---- Gửi báo cáo tất cả các ngày (kể cả T7/CN) hay chỉ ngày thường ----

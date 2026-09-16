@@ -145,6 +145,10 @@
         <label>Thời hạn<input name="thoiHan" type="date"></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
+      <div style="margin-bottom:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label>Chọn ngày: <input type="date" id="rsm-date"></label>
+        <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
+      </div>
       <div style="overflow-x:auto"><table id="table-rsm"></table></div>
     </section>
 
@@ -253,6 +257,24 @@
         <label>Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin,Moderator,Approver,Viewer)<input name="roles"></label>
         <div class="full"><button class="btn" type="submit">Tạo tài khoản</button></div>
       </form>
+
+      <h3>Danh sách user</h3>
+      <div style="margin-bottom:8px"><input id="userSearch" placeholder="Tìm theo mã NV, họ tên, quyền..." oninput="renderUsersList()" style="width:320px; padding:6px; border:1px solid #ccc; border-radius:4px;"></div>
+      <div style="overflow-x:auto"><table id="table-users"></table></div>
+
+      <div id="editUserModal" class="modal-overlay" hidden>
+        <div class="modal-box">
+          <h3>Sửa user <span id="editUserCode"></span></h3>
+          <input id="editUserFullName" placeholder="Họ tên">
+          <input id="editUserRoles" placeholder="Quyền (cách nhau dấu phẩy: SuCo,GiamSat,CongViec,KPI,Admin,Moderator,Approver,Viewer)">
+          <input id="editUserPassword" type="password" placeholder="Mật khẩu mới (để trống nếu không đổi)">
+          <div class="modal-err" id="editUserErr"></div>
+          <div class="modal-actions">
+            <button class="btn" style="margin-top:0; background:#888" onclick="closeEditUser()">Hủy</button>
+            <button class="btn" style="margin-top:0" onclick="submitEditUser()">Lưu</button>
+          </div>
+        </div>
+      </div>
 
       <h3>Giờ tự động gửi báo cáo hàng ngày</h3>
       <p>Mặc định 08:00 mỗi ngày. Đổi giờ ở đây có tác dụng ngay (trong vòng 1 phút), không cần khởi động lại app.</p>
