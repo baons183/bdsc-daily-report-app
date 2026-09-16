@@ -28,6 +28,25 @@ func (e *Env) ListCongViec(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, out)
 }
 
+// ListCongViecYesterday returns yesterday's Công việc rows (the window
+// immediately before whatever window ListCongViec/CreateCongViec is
+// currently using for "today") — read-only reference data the entry form
+// pre-fills from ("Dùng cho báo cáo hôm nay"), since most days repeat the
+// same work with only a few fields actually changing (Tiến độ, Hôm nay,
+// Ngày mai...). The user still reviews/edits and submits as a normal new
+// row — this never writes anything itself.
+func (e *Env) ListCongViecYesterday(w http.ResponseWriter, r *http.Request) {
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	todayReportDate := window.ReportDateForEntry(time.Now(), rh, rm)
+	start, end := window.ReportWindow(todayReportDate, rh, rm)
+	out, err := report.FetchCongViec(r.Context(), e.DB, start, end)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, out)
+}
+
 func (e *Env) loadAttachments(r *http.Request, congViecId int) []models.Attachment {
 	rows, err := e.DB.QueryContext(r.Context(), `SELECT Id, CongViecId, FileName, FilePath, ISNULL(ContentType,'') FROM dbo.CongViecAttachments WHERE CongViecId = ?`, congViecId)
 	if err != nil {

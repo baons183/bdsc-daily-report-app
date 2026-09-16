@@ -372,6 +372,9 @@ document.getElementById("form-giamsat").addEventListener("submit", async e => {
 async function loadCongViec() {
   // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
   document.getElementById("form-congviec").hidden = !hasRole("CongViec");
+  await Promise.all([loadCongViecToday(), loadCongViecYesterday()]);
+}
+async function loadCongViecToday() {
   const rows = (await api("/api/congviec")) || [];
   ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-congviec");
@@ -383,6 +386,36 @@ async function loadCongViec() {
       <td>${(r.attachments||[]).map(a => `<img class="thumb" src="/uploads/${a.filePath}">`).join("")}</td>
       <td>${actionButtons("CongViec", r)}</td>
     </tr>`).join("");
+}
+// Danh sách Công việc hôm qua, chỉ để xem/tái sử dụng - không sửa/xoá được
+// ở đây (đã bị khoá theo checkNotLocked nếu ngày đó đã Kiểm tra rồi, và dù
+// gì cũng không phải trọng tâm của bảng này). Bấm "Dùng cho báo cáo hôm
+// nay" chỉ điền vào form thêm dòng, không tự lưu gì cả.
+let CONGVIEC_YESTERDAY_CACHE = {};
+async function loadCongViecYesterday() {
+  const rows = (await api("/api/congviec/yesterday")) || [];
+  CONGVIEC_YESTERDAY_CACHE = Object.fromEntries(rows.map(r => [r.id, r]));
+  const t = document.getElementById("table-congviec-yesterday");
+  t.innerHTML = `<tr><th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
+      <th>Hôm nay</th><th>Ngày mai</th><th></th></tr>` +
+    (rows.length === 0
+      ? '<tr><td colspan="8" style="text-align:center;color:#888">Không có dữ liệu hôm qua</td></tr>'
+      : rows.map(r => `<tr>
+          <td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? ""}</td>
+          <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td>
+          <td><button class="btn" style="margin-top:0" onclick="reuseCongViecYesterday(${r.id})">Dùng cho báo cáo hôm nay</button></td>
+        </tr>`).join(""));
+}
+function reuseCongViecYesterday(id) {
+  const r = CONGVIEC_YESTERDAY_CACHE[id];
+  if (!r) return;
+  const form = document.getElementById("form-congviec");
+  exitEditMode(form); // đảm bảo không đang ở chế độ Sửa dòng khác - đây luôn là thêm dòng mới
+  ["thietBi", "dm", "noiDung", "keHoach", "tienDo", "homNay", "ngayMai", "deXuat", "luuY"].forEach(k => {
+    const el = form.elements[k];
+    if (el) el.value = r[k] ?? "";
+  });
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function editCongViec(id) {
   const r = ROWS_CACHE.congviec[id];

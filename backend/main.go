@@ -59,6 +59,7 @@ func main() {
 	mux.Handle("DELETE /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteGiamSat))))
 
 	mux.Handle("GET /api/congviec", authMw(http.HandlerFunc(env.ListCongViec)))
+	mux.Handle("GET /api/congviec/yesterday", authMw(http.HandlerFunc(env.ListCongViecYesterday)))
 	mux.Handle("POST /api/congviec", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.CreateCongViec))))
 	mux.Handle("PUT /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.UpdateCongViec))))
 	mux.Handle("DELETE /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.DeleteCongViec))))
