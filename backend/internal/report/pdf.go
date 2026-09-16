@@ -560,7 +560,7 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 }
 
 func (b *builder) sectionCBM(rows []models.CBMRow) {
-	b.subheading("2.1. Giám sát trực tuyến (online monitoring)")
+	b.subheading("2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)")
 	headers := []string{"TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"}
 	widths := []float64{8, 20, 26, 32, 50, 27, 27}
 	var data [][]string
@@ -571,7 +571,7 @@ func (b *builder) sectionCBM(rows []models.CBMRow) {
 }
 
 func (b *builder) sectionGiamSat(rows []models.GiamSat) {
-	b.subheading("2.2. Giám sát offline bằng thiết bị chuyên dụng/ phát hiện tại hiện trường")
+	b.subheading("2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG")
 	headers := []string{"TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
 	widths := []float64{8, 24, 12, 40, 30, 42, 20, 14}
 	var data [][]string
@@ -582,7 +582,7 @@ func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 }
 
 func (b *builder) sectionReliability(rows []models.Reliability) {
-	b.subheading("2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG ĐỘ TIN CẬY VÀ TOÀN VẸN CƠ KHÍ")
+	b.subheading("2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ")
 	headers := []string{"TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"}
 	widths := []float64{10, 28, 55, 55, 28, 14}
 	var data [][]string
