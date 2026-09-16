@@ -479,10 +479,11 @@ async function loadRSMReview() {
   const rows = (await api("/api/reliability?date=" + encodeURIComponent(date))) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-rsm");
-  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th></th></tr>" +
+  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đưa vào báo cáo</th><th></th></tr>" +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
+      <td style="text-align:center">${reliabilityIncludeCheckbox(r)}</td>
       <td>${reliabilityActionButtons(r)}</td>
     </tr>`).join("");
 }
@@ -493,10 +494,32 @@ async function loadRSMReview() {
 function canEditReliability(createdBy) {
   return hasRole("Admin") || hasRole("Approver") || createdBy === "" || createdBy === EMPCODE;
 }
+// Dòng tự động (createdBy rỗng): xoá không có tác dụng (lần đồng bộ kế
+// tiếp sẽ chèn lại y hệt vì key Thiết bị+Vấn đề vẫn còn trong PDF nguồn) -
+// nên thay nút Xoá bằng checkbox "Đưa vào báo cáo" (giống Giám sát trực
+// tuyến), vẫn sửa được như thường. Dòng nhập tay thì giữ nguyên Sửa/Xoá.
+function reliabilityIncludeCheckbox(r) {
+  if (r.createdBy !== "") return "";
+  const disabled = canEditReliability(r.createdBy) ? "" : "disabled";
+  return `<input type="checkbox" ${r.included ? "checked" : ""} ${disabled} onchange="toggleReliabilityInclude(${r.id}, this.checked)">`;
+}
+async function toggleReliabilityInclude(id, included) {
+  try {
+    await api(`/api/reliability/${id}/include`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ included }),
+    });
+  } catch (e) {
+    alert("Lỗi: " + e.message);
+    loadRSMReview();
+  }
+}
 function reliabilityActionButtons(r) {
   if (!canEditReliability(r.createdBy)) return "";
-  return `<button class="btn" style="margin-top:0" onclick="editReliability(${r.id})">Sửa</button> `
-    + `<button class="btn danger" onclick="delRow('reliability', ${r.id})">Xóa</button>`;
+  const editBtn = `<button class="btn" style="margin-top:0" onclick="editReliability(${r.id})">Sửa</button>`;
+  if (r.createdBy === "") return editBtn; // tu dong: khong co nut Xoa, dung checkbox o tren
+  return `${editBtn} <button class="btn danger" onclick="delRow('reliability', ${r.id})">Xóa</button>`;
 }
 function editReliability(id) {
   const r = ROWS_CACHE.rsm[id];

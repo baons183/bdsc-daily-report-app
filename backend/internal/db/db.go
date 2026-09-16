@@ -264,8 +264,22 @@ CREATE TABLE dbo.Reliability (
   ThoiHan DATE NULL,
   NgayBaoCao DATETIME NOT NULL,
   CreatedBy NVARCHAR(50) NULL,
-  CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
+  CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+  Included BIT NOT NULL DEFAULT 1
 );
+
+-- Additive column for tables that already existed before Included was
+-- introduced (CREATE TABLE above only applies to a brand-new database).
+-- Deleting an auto-imported (RSM PDF) row used to be pointless — the next
+-- sync just re-inserts it since its (ThietBi, VanDe) key still shows up in
+-- the source PDF and no longer matches anything in dbo.Reliability. This
+-- flag replaces "delete" with "exclude" for that case (see
+-- report.SyncReliabilityFromRSM's dedup, which only checks the key still
+-- exists here — regardless of Included — so an excluded row is never
+-- reinserted as a duplicate) while a manually typed row (which never gets
+-- resynced) still deletes for real.
+IF COL_LENGTH('dbo.Reliability', 'Included') IS NULL
+ALTER TABLE dbo.Reliability ADD Included BIT NOT NULL DEFAULT 1;
 `
 
 func Migrate(conn *sql.DB) error {

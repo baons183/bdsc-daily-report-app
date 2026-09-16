@@ -123,4 +123,9 @@ type Reliability struct {
 	ThoiHan    NullDate  `json:"thoiHan"`
 	NgayBaoCao time.Time `json:"ngayBaoCao"`
 	CreatedBy  string    `json:"createdBy"`
+	// Included is only meaningful for auto-imported (RSM PDF) rows — see
+	// report.SyncReliabilityFromRSM — where deleting isn't possible (the
+	// next sync would just reinsert it); a manually typed row keeps its own
+	// Xoá button and this stays true for it always.
+	Included bool `json:"included"`
 }

@@ -10,16 +10,20 @@ import (
 	"bdscdailyreport/internal/window"
 )
 
-// FetchReliability returns dbo.Reliability rows (report section "3.3. Vấn
-// đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị") for the window
-// [start, end] — a mix of rows a user typed in by hand and rows
-// SyncReliabilityFromRSM auto-imported, indistinguishable once saved.
+// FetchReliability returns EVERY dbo.Reliability row (report section "3.3.
+// Vấn đề khác liên quan tới độ tin cậy và toàn vẹn thiết bị") for the
+// window [start, end], included or not — a mix of rows a user typed in by
+// hand and rows SyncReliabilityFromRSM auto-imported, indistinguishable
+// once saved. Callers that build the actual report (PDF/email/Thống
+// kê/Báo cáo tuần) must run the result through FilterReliabilityIncluded;
+// the Reliability tab itself wants every row (so a user can toggle an
+// excluded one back on), so it calls this directly.
 // Newest-added row first (ORDER BY Id DESC) — TT is then renumbered
 // in-memory (1..N in that display order), same as FetchSuCo/FetchGiamSat/
 // FetchCongViec; the stored TT value in the DB is untouched.
 func FetchReliability(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.Reliability, error) {
 	rows, err := db.QueryContext(ctx, `
-SELECT Id, TT, ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, NgayBaoCao, ISNULL(CreatedBy,'')
+SELECT Id, TT, ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, NgayBaoCao, ISNULL(CreatedBy,''), Included
 FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
@@ -28,7 +32,7 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`
 	out := []models.Reliability{}
 	for rows.Next() {
 		var r models.Reliability
-		if err := rows.Scan(&r.Id, &r.TT, &r.ThietBi, &r.VanDe, &r.PhuongAn, &r.DonVi, &r.ThoiHan, &r.NgayBaoCao, &r.CreatedBy); err != nil {
+		if err := rows.Scan(&r.Id, &r.TT, &r.ThietBi, &r.VanDe, &r.PhuongAn, &r.DonVi, &r.ThoiHan, &r.NgayBaoCao, &r.CreatedBy, &r.Included); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -39,15 +43,40 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`
 	return out, nil
 }
 
+// FilterReliabilityIncluded drops any row a user has unticked "đưa vào báo
+// cáo" for, then renumbers TT 1..N over what's left — used only when
+// actually building the report (PDF/email/Thống kê/Báo cáo tuần), never
+// for the Reliability tab's own listing (which wants every row, TT and
+// all, so a user can still find and toggle an excluded one back on).
+// Without this renumbering, TT would carry gaps wherever an excluded row
+// used to sit (FetchReliability numbers 1..N over the FULL list before
+// any filtering happens) — same fix CBM's own render-time (i+1) numbering
+// gets "for free" by filtering before it ever assigns a number.
+func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
+	out := make([]models.Reliability, 0, len(rows))
+	for _, r := range rows {
+		if r.Included {
+			out = append(out, r)
+		}
+	}
+	for i := range out {
+		out[i].TT = i + 1
+	}
+	return out
+}
+
 // SyncReliabilityFromRSM auto-imports reportDate's RSM PDF issues (section
 // IV.2, filtered to Ban BDSC's own departments — see internal/rsm) into
 // dbo.Reliability for the window [start, end], skipping any (ThietBi,
-// VanDe) pair already present in that window so calling this repeatedly
-// (every report generation, every time a user opens the Reliability tab)
-// never creates duplicates. An auto-imported row's CreatedBy is blank;
-// once saved it's indistinguishable from, and just as editable/deletable
-// as, a row a user typed in by hand — there is no separate "exclude from
-// report" step anymore, deleting the row IS how you leave it out.
+// VanDe) pair already present in that window — checked regardless of
+// Included — so calling this repeatedly (every report generation, every
+// time a user opens the Reliability tab) never creates duplicates, and
+// unticking "đưa vào báo cáo" on an auto-imported row sticks (the row
+// still "exists" for this dedup check, so it's never silently reinserted).
+// An auto-imported row's CreatedBy is blank and just as editable as a row
+// a user typed in by hand, but it can't really be deleted (the next sync
+// would just reinsert it) — Included is how it's left out of the report
+// instead; a manually typed row still deletes for real.
 //
 // Best-effort: any error here is swallowed, since this convenience sync
 // should never block viewing or generating the rest of the report.

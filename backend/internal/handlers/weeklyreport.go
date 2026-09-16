@@ -92,6 +92,8 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	reliability, err := report.FetchReliability(ctx, e.DB, start, end)
 	if err != nil {
 		reliability = []models.Reliability{}
+	} else {
+		reliability = report.FilterReliabilityIncluded(reliability)
 	}
 	congviecAll, err := report.FetchCongViec(ctx, e.DB, start, end)
 	if err != nil {

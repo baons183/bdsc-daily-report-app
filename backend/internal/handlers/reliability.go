@@ -163,6 +163,45 @@ func (e *Env) DeleteReliability(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
+type setReliabilityIncludeReq struct {
+	Included bool `json:"included"`
+}
+
+// SetReliabilityInclude ticks/unticks "đưa vào báo cáo" for one row — the
+// only real way to leave an auto-imported (RSM PDF) row out of the report,
+// since deleting it would just get it reinserted on the next sync (its
+// (ThietBi, VanDe) key would no longer match anything, see
+// report.SyncReliabilityFromRSM). Same permission model as edit/delete
+// (canTouchReliability); no checkNotLocked here, matching CBM's own
+// SetCBMExclusion — the same lightweight, always-adjustable mechanism.
+func (e *Env) SetReliabilityInclude(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeErr(w, 400, "id khong hop le")
+		return
+	}
+	var createdBy string
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,'') FROM dbo.Reliability WHERE Id = ?`, id).Scan(&createdBy); err != nil {
+		writeErr(w, 404, "khong tim thay dong nay")
+		return
+	}
+	if !canTouchReliability(r, createdBy) {
+		writeErr(w, 403, "ban khong co quyen doi trang thai dong nay")
+		return
+	}
+	var in setReliabilityIncludeReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.Reliability SET Included = ? WHERE Id = ?`, in.Included, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
 func (e *Env) UpdateReliability(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)

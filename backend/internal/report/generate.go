@@ -83,6 +83,8 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 	reliability, err := FetchReliability(ctx, db, start, end)
 	if err != nil {
 		reliability = nil
+	} else {
+		reliability = FilterReliabilityIncluded(reliability)
 	}
 
 	return BuildInput{

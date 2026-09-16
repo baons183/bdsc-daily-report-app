@@ -89,6 +89,7 @@ func main() {
 	mux.Handle("POST /api/reliability", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.CreateReliability))))
 	mux.Handle("PUT /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.UpdateReliability))))
 	mux.Handle("DELETE /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteReliability))))
+	mux.Handle("POST /api/reliability/{id}/include", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.SetReliabilityInclude))))
 
 	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
 	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))
