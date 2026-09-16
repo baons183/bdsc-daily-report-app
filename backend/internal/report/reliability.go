@@ -65,6 +65,83 @@ func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
 	return out
 }
 
+// CarryForwardReliability copies EVERY one of yesterday's issues — included
+// or not — into today's window [start, end], from yesterday's window
+// [yStart, yEnd], preserving each one's Included flag as-is. Most "Vấn đề
+// kỹ thuật ảnh hưởng toàn vẹn và độ tin cậy thiết bị" issues stay open for
+// several days until actually resolved, so today's list defaults to "same
+// as yesterday" instead of starting empty — and an issue a user already
+// unticked "đưa vào báo cáo" for stays unticked today too, instead of
+// reappearing, since it's carried forward (excluded) rather than skipped:
+// skipping it here would leave no row for that key in today's window, and
+// SyncReliabilityFromRSM's dedup (by (ThietBi, VanDe) alone, regardless of
+// Included) would then treat it as "new" and re-add it fresh — silently
+// undoing the exclusion. Carrying it forward with Included=0 keeps the key
+// occupied, so that dedup correctly skips it instead. Skips any (ThietBi,
+// VanDe) pair already present in today's window (e.g. a manual entry made
+// earlier that morning) — same key SyncReliabilityFromRSM uses.
+//
+// Callers should run this BEFORE SyncReliabilityFromRSM (see
+// ListReliability/GatherData/GetWeeklyReport), so if today's RSM PDF
+// already lists the exact same issue, its own dedup check (which looks at
+// whatever is already in the window at the time it runs) finds this
+// carried-forward row and skips re-adding it — the PDF's most current
+// text about that issue does NOT overwrite what was carried forward,
+// since it's the same (ThietBi, VanDe) key either way; only genuinely new
+// entries from the PDF get added on top (Included=1, since a never-seen
+// issue was obviously never excluded).
+//
+// Best-effort: any error here is swallowed, same as SyncReliabilityFromRSM
+// — this convenience should never block viewing or generating the report.
+func CarryForwardReliability(db *sql.DB, yStart, yEnd, start, end time.Time) {
+	yRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, Included
+FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+		window.SQL(yStart), window.SQL(yEnd))
+	if err != nil {
+		return
+	}
+	type row struct {
+		thietBi, vanDe, phuongAn, donVi string
+		thoiHan                         sql.NullTime
+		included                        bool
+	}
+	var yesterday []row
+	for yRows.Next() {
+		var r row
+		if yRows.Scan(&r.thietBi, &r.vanDe, &r.phuongAn, &r.donVi, &r.thoiHan, &r.included) == nil {
+			yesterday = append(yesterday, r)
+		}
+	}
+	yRows.Close()
+	if len(yesterday) == 0 {
+		return
+	}
+
+	existing := map[string]bool{}
+	tRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,'') FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+		window.SQL(start), window.SQL(end))
+	if err != nil {
+		return
+	}
+	for tRows.Next() {
+		var tb, vd string
+		if tRows.Scan(&tb, &vd) == nil {
+			existing[tb+"|"+vd] = true
+		}
+	}
+	tRows.Close()
+
+	for _, r := range yesterday {
+		key := r.thietBi + "|" + r.vanDe
+		if existing[key] {
+			continue
+		}
+		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, start, end) {
+			existing[key] = true
+		}
+	}
+}
+
 // SyncReliabilityFromRSM auto-imports reportDate's RSM PDF issues (section
 // IV.2, filtered to Ban BDSC's own departments — see internal/rsm) into
 // dbo.Reliability for the window [start, end], skipping any (ThietBi,
@@ -118,7 +195,7 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 			thoiHan = sql.NullTime{Time: dt, Valid: true}
 		}
 		donVi := rsm.KeepDepartmentTokens(r.ActionBy, rsm.DepartmentKeywords)
-		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, start, end) {
+		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, start, end) {
 			existing[key] = true // in case the PDF itself lists the same issue twice
 		}
 	}
@@ -128,8 +205,10 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 // [start, end]'s window, the same UPDLOCK/HOLDLOCK-serialized numbering
 // every manual Create handler uses (see handlers.nextTTLocked) so an
 // auto-import running concurrently with a manual save can never collide
-// on the same TT.
-func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, start, end time.Time) bool {
+// on the same TT. included is set explicitly rather than left to the
+// column's own DB default, since CarryForwardReliability needs to persist
+// a previously-excluded issue's Included=0 across days (see its comment).
+func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, included bool, start, end time.Time) bool {
 	tx, err := db.Begin()
 	if err != nil {
 		return false
@@ -140,8 +219,8 @@ func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, th
 		window.SQL(start), window.SQL(end)).Scan(&count); err != nil {
 		return false
 	}
-	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy) VALUES (?, ?, ?, ?, ?, ?, ?, '')`,
-		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start); err != nil {
+	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, Included) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?)`,
+		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start, included); err != nil {
 		return false
 	}
 	return tx.Commit() == nil

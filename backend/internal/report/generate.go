@@ -79,6 +79,8 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 	db.QueryRowContext(ctx, `SELECT ReviewedByName, ReviewedAt, ApprovedByName, ApprovedAt FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate).
 		Scan(&reviewedByName, &reviewedAt, &approvedByName, &approvedAt)
 
+	yStart, yEnd := window.ReportWindow(reportDateT, rh, rm)
+	CarryForwardReliability(db, yStart, yEnd, start, end)
 	SyncReliabilityFromRSM(db, rsmPdfFolder, reportDateT, start, end)
 	reliability, err := FetchReliability(ctx, db, start, end)
 	if err != nil {

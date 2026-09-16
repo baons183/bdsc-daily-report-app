@@ -32,8 +32,12 @@ func canTouchReliability(r *http.Request, createdBy string) bool {
 // ListReliability defaults to the exact same "today's currently open
 // window" concept as ListSuCo/ListGiamSat/ListCongViec (window.EntryWindow)
 // — consistent with every other data-entry tab: a row typed in right now
-// belongs to the SAME window this reads back. It also syncs that window's
-// RSM PDF (report.SyncReliabilityFromRSM) before reading, using
+// belongs to the SAME window this reads back. Before reading, it also (1)
+// carries forward yesterday's still-included issues into today's window
+// (report.CarryForwardReliability) — most of these issues stay open for
+// days, so today's list defaults to "same as yesterday" instead of empty
+// — and (2) syncs today's window's RSM PDF (report.SyncReliabilityFromRSM,
+// which skips anything CarryForwardReliability already added), using
 // window.ReportDateForEntry — the exact report date THIS window prints
 // under — so an issue shows up here the moment its file exists, not just
 // once the actual PDF/email generates: the file for report date D is
@@ -65,6 +69,8 @@ func (e *Env) ListReliability(w http.ResponseWriter, r *http.Request) {
 		start, end = window.EntryWindow(now, rh, rm)
 		reportDate = window.ReportDateForEntry(now, rh, rm)
 	}
+	yStart, yEnd := window.ReportWindow(reportDate, rh, rm)
+	report.CarryForwardReliability(e.DB, yStart, yEnd, start, end)
 	report.SyncReliabilityFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 
 	out, err := report.FetchReliability(r.Context(), e.DB, start, end)
