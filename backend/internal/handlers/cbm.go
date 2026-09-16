@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"bdscdailyreport/internal/auth"
 	"bdscdailyreport/internal/db"
 	"bdscdailyreport/internal/models"
 	"bdscdailyreport/internal/report"
@@ -64,18 +65,23 @@ type setCBMExclusionReq struct {
 // SetCBMExclusion lets a user tick/untick whether one specific CBM alarm
 // row is included the next time a report is generated (PDF/email/Thống
 // kê/Báo cáo tuần) — the raw CBM tab itself always lists every row
-// regardless of this setting.
+// regardless of this setting. Restricted to GiamSat/Moderator/Approver
+// (Admin always passes via auth.HasRole's own bypass) — the CBM tab itself
+// has no role gate (role: null, so even a view-only registered account
+// sees it), but deciding what goes in the actual report is not a
+// view-only action.
 func (e *Env) SetCBMExclusion(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	if user == nil || !(auth.HasRole(user.Roles, "GiamSat") || auth.HasRole(user.Roles, "Moderator") || auth.HasRole(user.Roles, "Approver")) {
+		writeErr(w, 403, "ban khong co quyen chon dua/khong dua du lieu nay vao bao cao")
+		return
+	}
 	var in setCBMExclusionReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Tagname == "" {
 		writeErr(w, 400, "du lieu khong hop le")
 		return
 	}
-	user := currentUser(r)
-	updatedBy := ""
-	if user != nil {
-		updatedBy = user.EmployeeCode
-	}
+	updatedBy := user.EmployeeCode
 	if err := db.SetCBMExclusion(e.DB, in.Tagname, in.Description, in.DataTime, !in.Included, updatedBy); err != nil {
 		writeErr(w, 500, err.Error())
 		return
