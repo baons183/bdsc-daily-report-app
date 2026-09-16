@@ -29,9 +29,9 @@ func canTouchReliability(r *http.Request, createdBy string) bool {
 	return auth.HasRole(claims.Roles, "Admin") || auth.HasRole(claims.Roles, "Approver") || createdBy == "" || claims.EmployeeCode == createdBy
 }
 
-// ListReliability uses the exact same "today's currently open window"
-// concept as ListSuCo/ListGiamSat/ListCongViec (window.EntryWindow) —
-// consistent with every other data-entry tab: a row typed in right now
+// ListReliability defaults to the exact same "today's currently open
+// window" concept as ListSuCo/ListGiamSat/ListCongViec (window.EntryWindow)
+// — consistent with every other data-entry tab: a row typed in right now
 // belongs to the SAME window this reads back. It also syncs that window's
 // RSM PDF (report.SyncReliabilityFromRSM) before reading, using
 // window.ReportDateForEntry — the exact report date THIS window prints
@@ -41,11 +41,30 @@ func canTouchReliability(r *http.Request, createdBy string) bool {
 // (which only closes at the next cutoff), so opening this tab any time
 // from then until the window closes picks it up, editable/deletable right
 // here like any manually typed row.
+//
+// An optional "?date=YYYY-MM-DD" switches to browsing a specific (usually
+// past) window instead — same date->window convention as ListCBM (the
+// chosen date is the window's closing cutoff), so a past window still
+// syncs/shows its own RSM PDF and can be edited/deleted (via
+// checkNotLocked) as long as that report date hasn't been Kiểm tra/Phê
+// duyệt'd yet.
 func (e *Env) ListReliability(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
-	now := time.Now()
-	start, end := window.EntryWindow(now, rh, rm)
-	reportDate := window.ReportDateForEntry(now, rh, rm)
+	var start, end, reportDate time.Time
+	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
+		d, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
+		if err != nil {
+			writeErr(w, 400, "ngay khong hop le, can dang YYYY-MM-DD")
+			return
+		}
+		runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local)
+		start, end = window.ReportWindow(runAt, rh, rm)
+		reportDate = runAt.AddDate(0, 0, -1)
+	} else {
+		now := time.Now()
+		start, end = window.EntryWindow(now, rh, rm)
+		reportDate = window.ReportDateForEntry(now, rh, rm)
+	}
 	report.SyncReliabilityFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 
 	out, err := report.FetchReliability(r.Context(), e.DB, start, end)
