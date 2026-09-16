@@ -80,26 +80,83 @@ async function api(path, opts = {}) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
-async function doLogin() {
-  const employeeCode = document.getElementById("loginCode").value.trim();
-  const password = document.getElementById("loginPw").value;
-  const errBox = document.getElementById("loginErr");
-  errBox.textContent = "";
+// ---- Đăng nhập qua Portal (SSO) ----
+// App này không còn màn hình đăng nhập/mật khẩu riêng nữa - người dùng chưa
+// đăng nhập sẽ được tự động chuyển sang Portal chung (cùng JWT_SECRET_KEY
+// với Maintenance Report App/Checksheet), Portal chuyển về đây kèm ?token=,
+// đổi lấy token riêng của app này (có sẵn Roles theo UserAppRole, xem
+// SsoExchange trong auth_handlers.go) rồi mới vào được nội dung.
+const PORTAL_URL = "http://pcu-mnt-250223:8100";
+let PENDING_SSO_TOKEN = "";
+
+function redirectToPortal() {
+  const here = window.location.origin + window.location.pathname;
+  window.location.href = PORTAL_URL + "/?redirect_uri=" + encodeURIComponent(here);
+}
+
+async function ssoFetch(path, token) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText);
+    Object.assign(err, data);
+    throw err;
+  }
+  return data;
+}
+
+function applyLoginData(data) {
+  TOKEN = data.token; ROLES = data.roles; FULLNAME = data.fullName; EMPCODE = data.employeeCode;
+  localStorage.setItem("bdsc_token", TOKEN);
+  localStorage.setItem("bdsc_roles", ROLES);
+  localStorage.setItem("bdsc_fullname", FULLNAME);
+  localStorage.setItem("bdsc_empcode", EMPCODE);
+}
+
+async function bootAuth() {
+  const urlToken = new URLSearchParams(window.location.search).get("token");
+  if (TOKEN && !urlToken) { showApp(); return; }
+  if (!urlToken) { redirectToPortal(); return; }
+
+  // Vừa được Portal chuyển về kèm token - xoá khỏi URL ngay (không để lộ
+  // trên thanh địa chỉ/lịch sử trình duyệt) rồi đổi sang token thật của app.
+  window.history.replaceState({}, "", window.location.pathname);
   try {
-    const data = await api("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeCode, password }),
-    });
-    TOKEN = data.token; ROLES = data.roles; FULLNAME = data.fullName; EMPCODE = data.employeeCode;
-    localStorage.setItem("bdsc_token", TOKEN);
-    localStorage.setItem("bdsc_roles", ROLES);
-    localStorage.setItem("bdsc_fullname", FULLNAME);
-    localStorage.setItem("bdsc_empcode", EMPCODE);
+    applyLoginData(await ssoFetch("/api/sso-exchange", urlToken));
     showApp();
   } catch (e) {
-    errBox.textContent = "Đăng nhập thất bại: " + e.message;
+    if (e.code === "NO_ROLE") {
+      PENDING_SSO_TOKEN = urlToken;
+      showNoRole(e.fullName || e.employeeCode || "");
+    } else {
+      redirectToPortal();
+    }
   }
+}
+
+function showNoRole(who) {
+  document.getElementById("bootScreen").style.display = "none";
+  document.getElementById("noRoleWho").textContent = who;
+  document.getElementById("noRoleScreen").style.display = "flex";
+}
+
+async function submitSsoRegister() {
+  const errBox = document.getElementById("noRoleErr");
+  errBox.textContent = "";
+  if (!PENDING_SSO_TOKEN) { errBox.textContent = "Phiên đã hết hạn, vui lòng tải lại trang."; return; }
+  try {
+    await ssoFetch("/api/sso-register", PENDING_SSO_TOKEN);
+    applyLoginData(await ssoFetch("/api/sso-exchange", PENDING_SSO_TOKEN));
+  } catch (e) {
+    errBox.textContent = "Lỗi: " + e.message;
+    return;
+  }
+  document.getElementById("noRoleScreen").style.display = "none";
+  showApp();
 }
 
 function logout() {
@@ -107,42 +164,9 @@ function logout() {
   location.reload();
 }
 
-function openRegister() {
-  document.getElementById("regCode").value = "";
-  document.getElementById("regPw").value = "";
-  document.getElementById("regErr").textContent = "";
-  document.getElementById("registerModal").hidden = false;
-}
-function closeRegister() {
-  document.getElementById("registerModal").hidden = true;
-}
-// "Đăng ký" no longer creates a new account/password - it verifies the
-// caller's EXISTING Maintenance Report App/Checksheet credentials and grants
-// Viewer access to this app if they don't have a role here yet (see
-// RegisterViewer in auth_handlers.go).
-async function submitRegister() {
-  const employeeCode = document.getElementById("regCode").value.trim();
-  const password = document.getElementById("regPw").value;
-  const errBox = document.getElementById("regErr");
-  errBox.textContent = "";
-  if (!employeeCode || !password) { errBox.textContent = "Vui lòng nhập đủ Mã nhân viên/Mật khẩu."; return; }
-  try {
-    await api("/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeCode, password }),
-    });
-  } catch (e) {
-    errBox.textContent = "Lỗi: " + e.message;
-    return;
-  }
-  closeRegister();
-  alert("Đã cấp quyền dùng app. Vui lòng đăng nhập.");
-  document.getElementById("loginCode").value = employeeCode;
-}
-
 function showApp() {
-  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("bootScreen").style.display = "none";
+  document.getElementById("noRoleScreen").style.display = "none";
   document.getElementById("app").style.display = "block";
   document.getElementById("whoami").textContent = FULLNAME || "";
   buildTabs();
@@ -1146,7 +1170,7 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-if (TOKEN) showApp(); else document.getElementById("loginScreen").style.display = "flex";
+bootAuth();
 
 // Lưới an toàn chung: mọi lỗi API không được bắt riêng (VD: submit form bị
 // chặn do không phải chính chủ tạo dòng) vẫn hiện được thông báo cho người

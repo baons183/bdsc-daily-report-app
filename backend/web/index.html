@@ -40,10 +40,9 @@
   .suco-row1 label.tg { flex: 1; }
   .btn { background: #0b4f8a; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 8px; }
   .btn.danger { background: #c0392b; padding: 4px 10px; font-size: 12px; }
-  #loginScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
-  #loginBox { background: #fff; padding: 30px; border-radius: 8px; width: 300px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-  #loginBox input { width: 100%; box-sizing: border-box; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 4px; }
-  #loginErr { color: #c0392b; font-size: 13px; min-height: 16px; }
+  #bootScreen, #noRoleScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
+  #loginBox { background: #fff; padding: 30px; border-radius: 8px; width: 320px; box-shadow: 0 2px 8px rgba(0,0,0,.15); text-align: center; }
+  #noRoleErr { color: #c0392b; font-size: 13px; min-height: 16px; }
   .thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 3px; margin: 2px; }
   .kpi-table { text-align: center; }
   .kpi-table th { text-align: center; vertical-align: middle; }
@@ -64,30 +63,16 @@
 </head>
 <body>
 
-<div id="loginScreen">
-  <div id="loginBox">
-    <h2>Đăng nhập</h2>
-    <input id="loginCode" placeholder="Mã nhân viên">
-    <input id="loginPw" type="password" placeholder="Mật khẩu">
-    <div id="loginErr"></div>
-    <button class="btn" style="width:100%" onclick="doLogin()">Đăng nhập</button>
-    <div style="text-align:center; margin-top:10px; font-size:13px">
-      Đã có tài khoản Maintenance Report App / Checksheet? <a href="#" onclick="openRegister(); return false;">Dùng app này</a>
-    </div>
-  </div>
+<div id="bootScreen">
+  <div id="loginBox">Đang kiểm tra đăng nhập...</div>
 </div>
 
-<div id="registerModal" class="modal-overlay" hidden>
-  <div class="modal-box">
-    <h3>Bắt đầu dùng app này</h3>
-    <p style="font-size:13px; color:#555; margin-top:-6px">Nhập đúng mã nhân viên/mật khẩu bạn đang dùng để đăng nhập Maintenance Report App hoặc Checksheet — chưa có tài khoản ở 2 app đó thì phải tạo ở bên đó trước. Sau khi xác nhận, bạn sẽ xem được tab Báo cáo ngày và Báo cáo tuần ở đây. Cần thêm quyền nhập liệu thì liên hệ Admin.</p>
-    <input id="regCode" placeholder="Mã nhân viên">
-    <input id="regPw" type="password" placeholder="Mật khẩu">
-    <div class="modal-err" id="regErr"></div>
-    <div class="modal-actions">
-      <button class="btn" style="margin-top:0; background:#888" onclick="closeRegister()">Hủy</button>
-      <button class="btn" style="margin-top:0" onclick="submitRegister()">Xác nhận</button>
-    </div>
+<div id="noRoleScreen" hidden>
+  <div id="loginBox">
+    <h2>Chưa được cấp quyền</h2>
+    <p style="font-size:13px; color:#555">Tài khoản <b id="noRoleWho"></b> đã đăng nhập qua Portal, nhưng chưa được cấp quyền dùng app Báo cáo ngày. Bấm bên dưới để tự cấp quyền xem (Viewer: xem Báo cáo ngày/tuần) — cần thêm quyền nhập liệu thì liên hệ Admin.</p>
+    <div id="noRoleErr"></div>
+    <button class="btn" style="width:100%" onclick="submitSsoRegister()">Đăng ký dùng app này</button>
   </div>
 </div>
 

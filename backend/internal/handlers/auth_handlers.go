@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,40 +14,69 @@ import (
 // come from the shared MaintenanceUserAccount/SDTC_BDSC tables (same DB the
 // sibling MaintenanceReportApp/checksheet-app already use for their own
 // login), cross-database queried via e.AssetDBName same as assets.go does
-// for Asset_Master. Only this app's OWN role assignment (UserAppRole,
-// AppKey='bdscDailyReport') is app-specific - see database.py/db.js on the
-// sibling apps for the shared schema. Creating/resetting a shared password
-// is no longer this app's job at all (use MaintenanceReportApp's own
-// register / forgot-password flow).
+// for Asset_Master. This app has no login screen of its own anymore either -
+// see SsoExchange below: the web UI redirects an unauthenticated visitor to
+// the shared Portal (http://pcu-mnt-250223:8100) and exchanges the token it
+// hands back for one of this app's own (role-bearing) tokens.
 
-type loginReq struct {
-	EmployeeCode string `json:"employeeCode"`
-	Password     string `json:"password"`
+// resolveAppUser looks up an already-identified EmployeeCode's display name
+// (SDTC_BDSC) and this app's own role assignment (UserAppRole,
+// AppKey='bdscDailyReport'). Returns a non-nil err if the person has no role
+// here yet - the caller isn't authenticated by password here, just already
+// proven to be who they say by a verified token, so "no role" is the only
+// failure mode left to check.
+func (e *Env) resolveAppUser(ctx context.Context, empCode string) (fullName, roles string, err error) {
+	qName := fmt.Sprintf(`
+		SELECT RequesterName FROM %s.dbo.SDTC_BDSC
+		WHERE UPPER(LTRIM(RTRIM(EmployeeCode))) = ?`, e.AssetDBName)
+	_ = e.DB.QueryRowContext(ctx, qName, empCode).Scan(&fullName)
+
+	qRole := fmt.Sprintf(`
+		SELECT Role FROM %s.dbo.UserAppRole
+		WHERE EmployeeCode = ? AND AppKey = 'bdscDailyReport'`, e.AssetDBName)
+	errRole := e.DB.QueryRowContext(ctx, qRole, empCode).Scan(&roles)
+	if errRole != nil || strings.TrimSpace(roles) == "" {
+		return fullName, "", fmt.Errorf("no role assigned")
+	}
+	return fullName, roles, nil
 }
 
-func (e *Env) Login(jwtSecret string) http.HandlerFunc {
+type ssoExchangeReq struct {
+	Token string `json:"token"`
+}
+
+// SsoExchange takes a token issued by any sibling app sharing the same
+// JWT_SECRET_KEY (Portal, MaintenanceReportApp, checksheet-app - identified
+// by the shared "sub" claim) and, if the EmployeeCode it names is active and
+// has a role here, exchanges it for one of this app's own tokens (which,
+// unlike the incoming one, carries this app's own Roles claim - see
+// auth.IssueToken/auth.Middleware, which trusts that claim directly rather
+// than re-querying the DB on every request). Public route - the caller has
+// no BDSC Daily Report token yet by definition.
+func (e *Env) SsoExchange(jwtSecret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var in loginReq
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, 400, "du lieu khong hop le")
+		var in ssoExchangeReq
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Token == "" {
+			writeErr(w, 400, "thieu token")
+			return
+		}
+		claims, err := auth.ParseToken(jwtSecret, in.Token)
+		if err != nil || claims.EmployeeCode == "" {
+			writeErr(w, 401, "token khong hop le hoac het han, vui long dang nhap lai")
 			return
 		}
 		if !validSQLIdent.MatchString(e.AssetDBName) {
 			writeErr(w, 500, "cau hinh ASSET_DB_NAME khong hop le")
 			return
 		}
-		empCode := strings.ToUpper(strings.TrimSpace(in.EmployeeCode))
+		empCode := strings.ToUpper(strings.TrimSpace(claims.EmployeeCode))
 
-		var canonicalCode, salt, hash string
 		var isActive bool
-		q := fmt.Sprintf(`
-			SELECT EmployeeCode, PasswordSalt, PasswordHash, IsActive
-			FROM %s.dbo.MaintenanceUserAccount
+		qActive := fmt.Sprintf(`
+			SELECT IsActive FROM %s.dbo.MaintenanceUserAccount
 			WHERE UPPER(LTRIM(RTRIM(EmployeeCode))) = ?`, e.AssetDBName)
-		err := e.DB.QueryRowContext(r.Context(), q, empCode).
-			Scan(&canonicalCode, &salt, &hash, &isActive)
-		if err != nil || !auth.VerifySharedPassword(in.Password, salt, hash) {
-			writeErr(w, 401, "sai ma nhan vien hoac mat khau")
+		if err := e.DB.QueryRowContext(r.Context(), qActive, empCode).Scan(&isActive); err != nil {
+			writeErr(w, 401, "tai khoan khong ton tai")
 			return
 		}
 		if !isActive {
@@ -54,91 +84,74 @@ func (e *Env) Login(jwtSecret string) http.HandlerFunc {
 			return
 		}
 
-		var fullName string
-		qName := fmt.Sprintf(`
-			SELECT RequesterName FROM %s.dbo.SDTC_BDSC
-			WHERE UPPER(LTRIM(RTRIM(EmployeeCode))) = ?`, e.AssetDBName)
-		_ = e.DB.QueryRowContext(r.Context(), qName, canonicalCode).Scan(&fullName)
-
-		var roles string
-		qRole := fmt.Sprintf(`
-			SELECT Role FROM %s.dbo.UserAppRole
-			WHERE EmployeeCode = ? AND AppKey = 'bdscDailyReport'`, e.AssetDBName)
-		errRole := e.DB.QueryRowContext(r.Context(), qRole, canonicalCode).Scan(&roles)
-		if errRole != nil || strings.TrimSpace(roles) == "" {
-			writeErr(w, 403, "tai khoan chua duoc cap quyen dung app nay - lien he Admin")
+		fullName, roles, err := e.resolveAppUser(r.Context(), empCode)
+		if err != nil {
+			// Distinguishable from other failures so the frontend can offer
+			// "Đăng ký dùng app này" instead of just an error message.
+			writeJSON(w, 403, map[string]string{
+				"error": "tai khoan chua duoc cap quyen dung app nay",
+				"code":  "NO_ROLE", "employeeCode": empCode, "fullName": fullName,
+			})
 			return
 		}
 
-		tok, err := auth.IssueToken(jwtSecret, canonicalCode, fullName, roles)
+		tok, err := auth.IssueToken(jwtSecret, empCode, fullName, roles)
 		if err != nil {
 			writeErr(w, 500, err.Error())
 			return
 		}
 		writeJSON(w, 200, map[string]string{
-			"token": tok, "employeeCode": canonicalCode, "fullName": fullName, "roles": roles,
+			"token": tok, "employeeCode": empCode, "fullName": fullName, "roles": roles,
 		})
 	}
 }
 
-type registerReq struct {
-	EmployeeCode string `json:"employeeCode"`
-	Password     string `json:"password"`
-	FullName     string `json:"fullName"`
+type ssoRegisterReq struct {
+	Token string `json:"token"`
 }
 
-// RegisterViewer no longer creates a new account/password - it verifies the
-// caller's EXISTING shared credentials (from MaintenanceReportApp/
-// checksheet-app) and, if they don't have a BDSC Daily Report role yet,
-// grants them Viewer (read-only: Thống kê + Báo cáo tuần). An Admin can add
-// more roles afterwards from the Quản trị tab. FullName in the request body
-// is accepted but ignored (kept for frontend request-shape compatibility) -
-// the real name comes from SDTC_BDSC.
-func (e *Env) RegisterViewer(w http.ResponseWriter, r *http.Request) {
-	var in registerReq
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.EmployeeCode == "" || in.Password == "" {
-		writeErr(w, 400, "thieu ma nhan vien/mat khau")
-		return
-	}
-	if !validSQLIdent.MatchString(e.AssetDBName) {
-		writeErr(w, 500, "cau hinh ASSET_DB_NAME khong hop le")
-		return
-	}
-	empCode := strings.ToUpper(strings.TrimSpace(in.EmployeeCode))
+// RegisterViewerSSO grants Viewer access (read-only: Báo cáo ngày + Báo cáo
+// tuần) to whoever a verified SSO token identifies, if they don't already
+// have a role here - the self-serve "no role yet" screen calls this instead
+// of asking for a password again (identity is already proven by the token).
+// An Admin can grant more roles afterwards from the Quản trị tab.
+func (e *Env) RegisterViewerSSO(jwtSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in ssoRegisterReq
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Token == "" {
+			writeErr(w, 400, "thieu token")
+			return
+		}
+		claims, err := auth.ParseToken(jwtSecret, in.Token)
+		if err != nil || claims.EmployeeCode == "" {
+			writeErr(w, 401, "token khong hop le hoac het han, vui long dang nhap lai")
+			return
+		}
+		if !validSQLIdent.MatchString(e.AssetDBName) {
+			writeErr(w, 500, "cau hinh ASSET_DB_NAME khong hop le")
+			return
+		}
+		empCode := strings.ToUpper(strings.TrimSpace(claims.EmployeeCode))
 
-	var salt, hash string
-	var isActive bool
-	q := fmt.Sprintf(`
-		SELECT PasswordSalt, PasswordHash, IsActive FROM %s.dbo.MaintenanceUserAccount
-		WHERE UPPER(LTRIM(RTRIM(EmployeeCode))) = ?`, e.AssetDBName)
-	err := e.DB.QueryRowContext(r.Context(), q, empCode).Scan(&salt, &hash, &isActive)
-	if err != nil {
-		writeErr(w, 404, "Chua co tai khoan dung chung - dang nhap Maintenance Report App hoac Checksheet truoc de tao tai khoan, roi quay lai dang ky o day.")
-		return
-	}
-	if !isActive || !auth.VerifySharedPassword(in.Password, salt, hash) {
-		writeErr(w, 401, "sai ma nhan vien hoac mat khau")
-		return
-	}
+		var count int
+		qc := fmt.Sprintf(`
+			SELECT COUNT(*) FROM %s.dbo.UserAppRole
+			WHERE EmployeeCode = ? AND AppKey = 'bdscDailyReport'`, e.AssetDBName)
+		_ = e.DB.QueryRowContext(r.Context(), qc, empCode).Scan(&count)
+		if count > 0 {
+			writeErr(w, 409, "tai khoan nay da duoc cap quyen dung app roi")
+			return
+		}
 
-	var count int
-	qc := fmt.Sprintf(`
-		SELECT COUNT(*) FROM %s.dbo.UserAppRole
-		WHERE EmployeeCode = ? AND AppKey = 'bdscDailyReport'`, e.AssetDBName)
-	_ = e.DB.QueryRowContext(r.Context(), qc, empCode).Scan(&count)
-	if count > 0 {
-		writeErr(w, 409, "tai khoan nay da duoc cap quyen dung app roi, vui long dang nhap")
-		return
+		qi := fmt.Sprintf(`
+			INSERT INTO %s.dbo.UserAppRole (EmployeeCode, AppKey, Role)
+			VALUES (?, 'bdscDailyReport', 'Viewer')`, e.AssetDBName)
+		if _, err := e.DB.ExecContext(r.Context(), qi, empCode); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 201, map[string]bool{"ok": true})
 	}
-
-	qi := fmt.Sprintf(`
-		INSERT INTO %s.dbo.UserAppRole (EmployeeCode, AppKey, Role)
-		VALUES (?, 'bdscDailyReport', 'Viewer')`, e.AssetDBName)
-	if _, err := e.DB.ExecContext(r.Context(), qi, empCode); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	writeJSON(w, 201, map[string]bool{"ok": true})
 }
 
 type userResp struct {
@@ -235,7 +248,7 @@ type updateUserReq struct {
 // no surrogate id, its natural key is (EmployeeCode, AppKey). FullName and
 // Password are no longer editable here: FullName always comes live from
 // SDTC_BDSC, and password changes belong to the shared account (see
-// RegisterViewer's comment).
+// RegisterViewerSSO's comment).
 func (e *Env) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	empCode := strings.ToUpper(strings.TrimSpace(r.PathValue("employeeCode")))
 	if empCode == "" {

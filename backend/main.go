@@ -34,9 +34,10 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// public
-	mux.HandleFunc("POST /api/login", env.Login(cfg.JWTSecret))
-	mux.HandleFunc("POST /api/register", env.RegisterViewer)
+	// public - no local login anymore, the web UI sends people to the shared
+	// Portal and exchanges the token it hands back (see auth_handlers.go)
+	mux.HandleFunc("POST /api/sso-exchange", env.SsoExchange(cfg.JWTSecret))
+	mux.HandleFunc("POST /api/sso-register", env.RegisterViewerSSO(cfg.JWTSecret))
 
 	// authenticated
 	authMw := auth.Middleware(cfg.JWTSecret)
