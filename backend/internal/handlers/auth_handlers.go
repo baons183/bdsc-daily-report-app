@@ -100,9 +100,36 @@ func (e *Env) SsoExchange(jwtSecret string) http.HandlerFunc {
 			writeErr(w, 500, err.Error())
 			return
 		}
+		e.recordLogin(r.Context(), empCode)
 		writeJSON(w, 200, map[string]string{
 			"token": tok, "employeeCode": empCode, "fullName": fullName, "roles": roles,
 		})
+	}
+}
+
+// recordLogin upserts today's login timestamp into the shared
+// dbo.UserAppLastLogin (EmployeeCode+AppKey -> LastLoginAt) for AppKey
+// 'bdscDailyReport' - same table AdminPanel's/checksheet-app's/
+// MaintenanceReportApp's own db layer already creates (this app never
+// creates it itself, same as it never creates dbo.UserAppRole - it only
+// ever reads/writes rows in a table one of the others owns). Called once per
+// SsoExchange (this app's real login moment - there's no separate password-
+// login endpoint anymore), so no throttling needed here unlike the other
+// apps' per-request auth middleware. Best-effort: a failure here shouldn't
+// block the person from actually logging in.
+func (e *Env) recordLogin(ctx context.Context, empCode string) {
+	if !validSQLIdent.MatchString(e.AssetDBName) {
+		return
+	}
+	q := fmt.Sprintf(`
+		MERGE %s.dbo.UserAppLastLogin AS target
+		USING (SELECT ? AS EmployeeCode, 'bdscDailyReport' AS AppKey) AS src
+		ON target.EmployeeCode = src.EmployeeCode AND target.AppKey = src.AppKey
+		WHEN MATCHED THEN UPDATE SET LastLoginAt = GETDATE()
+		WHEN NOT MATCHED THEN INSERT (EmployeeCode, AppKey, LastLoginAt) VALUES (?, 'bdscDailyReport', GETDATE());`,
+		e.AssetDBName)
+	if _, err := e.DB.ExecContext(ctx, q, empCode, empCode); err != nil {
+		fmt.Println("recordLogin loi:", err)
 	}
 }
 
