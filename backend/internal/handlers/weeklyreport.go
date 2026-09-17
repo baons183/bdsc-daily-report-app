@@ -97,6 +97,31 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	} else {
 		reliability = report.FilterReliabilityIncluded(reliability)
 	}
+
+	// Một vấn đề (ThietBi/tag + VanDe) được CarryForwardReliability chép lại
+	// mỗi ngày cho tới khi được giải quyết, nên trong khoảng nhiều ngày của
+	// Báo cáo tuần, cùng 1 tag name sẽ lặp lại 1 dòng cho mỗi ngày còn mở —
+	// chỉ giữ lại đúng bản ghi của ngày MỚI NHẤT cho mỗi cặp đó, cùng cách
+	// làm với bảng Công việc ở trên.
+	reliabilityLatestByKey := map[string]models.Reliability{}
+	reliabilityOrder := []string{}
+	for _, r := range reliability {
+		key := r.ThietBi + "|" + r.VanDe
+		if existing, ok := reliabilityLatestByKey[key]; !ok || r.NgayBaoCao.After(existing.NgayBaoCao) {
+			if !ok {
+				reliabilityOrder = append(reliabilityOrder, key)
+			}
+			reliabilityLatestByKey[key] = r
+		}
+	}
+	reliabilityLatest := make([]models.Reliability, 0, len(reliabilityOrder))
+	for _, key := range reliabilityOrder {
+		reliabilityLatest = append(reliabilityLatest, reliabilityLatestByKey[key])
+	}
+	for i := range reliabilityLatest {
+		reliabilityLatest[i].TT = i + 1
+	}
+	reliability = reliabilityLatest
 	congviecAll, err := report.FetchCongViec(ctx, e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
