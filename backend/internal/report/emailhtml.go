@@ -163,7 +163,7 @@ func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []mode
 }
 
 func emailCongViecSection(b *strings.Builder, rows []models.CongViec) {
-	emailHeading(b, "4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG")
+	emailHeading(b, "4. KẾT QUẢ THỰC HIỆN CÁC CÔNG VIỆC TRỌNG TÂM")
 	if len(rows) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 		return

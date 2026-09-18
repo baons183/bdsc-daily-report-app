@@ -813,7 +813,7 @@ function renderReportView(d) {
       <div class="rv-heading">3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
 
-      <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG</div>
+      <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÁC CÔNG VIỆC TRỌNG TÂM</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
 
       <div class="rv-heading">5. VẤN ĐỀ CẦN ĐỀ XUẤT</div>

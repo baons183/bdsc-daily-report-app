@@ -593,7 +593,7 @@ func (b *builder) sectionReliability(rows []models.Reliability) {
 }
 
 func (b *builder) sectionCongViec(rows []models.CongViec) {
-	b.heading("4. KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC QUAN TRỌNG")
+	b.heading("4. KẾT QUẢ THỰC HIỆN CÁC CÔNG VIỆC TRỌNG TÂM")
 	headers := []string{"TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"}
 	widths := []float64{8, 18, 12, 44, 25, 18, 43, 22}
 	var data [][]string
