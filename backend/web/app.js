@@ -87,7 +87,6 @@ async function api(path, opts = {}) {
 // đổi lấy token riêng của app này (có sẵn Roles theo UserAppRole, xem
 // SsoExchange trong auth_handlers.go) rồi mới vào được nội dung.
 const PORTAL_URL = "http://pcu-mnt-250223:8100";
-let PENDING_SSO_TOKEN = "";
 
 function redirectToPortal() {
   const here = window.location.origin + window.location.pathname;
@@ -130,7 +129,6 @@ async function bootAuth() {
     showApp();
   } catch (e) {
     if (e.code === "NO_ROLE") {
-      PENDING_SSO_TOKEN = urlToken;
       showNoRole(e.fullName || e.employeeCode || "");
     } else {
       redirectToPortal();
@@ -142,21 +140,6 @@ function showNoRole(who) {
   document.getElementById("bootScreen").style.display = "none";
   document.getElementById("noRoleWho").textContent = who;
   document.getElementById("noRoleScreen").style.display = "flex";
-}
-
-async function submitSsoRegister() {
-  const errBox = document.getElementById("noRoleErr");
-  errBox.textContent = "";
-  if (!PENDING_SSO_TOKEN) { errBox.textContent = "Phiên đã hết hạn, vui lòng tải lại trang."; return; }
-  try {
-    await ssoFetch("/api/sso-register", PENDING_SSO_TOKEN);
-    applyLoginData(await ssoFetch("/api/sso-exchange", PENDING_SSO_TOKEN));
-  } catch (e) {
-    errBox.textContent = "Lỗi: " + e.message;
-    return;
-  }
-  document.getElementById("noRoleScreen").style.display = "none";
-  showApp();
 }
 
 function logout() {

@@ -133,54 +133,6 @@ func (e *Env) recordLogin(ctx context.Context, empCode string) {
 	}
 }
 
-type ssoRegisterReq struct {
-	Token string `json:"token"`
-}
-
-// RegisterViewerSSO grants Viewer access (read-only: Báo cáo ngày + Báo cáo
-// tuần) to whoever a verified SSO token identifies, if they don't already
-// have a role here - the self-serve "no role yet" screen calls this instead
-// of asking for a password again (identity is already proven by the token).
-// An Admin can grant more roles afterwards from the Quản trị tab.
-func (e *Env) RegisterViewerSSO(jwtSecret string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var in ssoRegisterReq
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Token == "" {
-			writeErr(w, 400, "thieu token")
-			return
-		}
-		claims, err := auth.ParseToken(jwtSecret, in.Token)
-		if err != nil || claims.EmployeeCode == "" {
-			writeErr(w, 401, "token khong hop le hoac het han, vui long dang nhap lai")
-			return
-		}
-		if !validSQLIdent.MatchString(e.AssetDBName) {
-			writeErr(w, 500, "cau hinh ASSET_DB_NAME khong hop le")
-			return
-		}
-		empCode := strings.ToUpper(strings.TrimSpace(claims.EmployeeCode))
-
-		var count int
-		qc := fmt.Sprintf(`
-			SELECT COUNT(*) FROM %s.dbo.UserAppRole
-			WHERE EmployeeCode = ? AND AppKey = 'bdscDailyReport'`, e.AssetDBName)
-		_ = e.DB.QueryRowContext(r.Context(), qc, empCode).Scan(&count)
-		if count > 0 {
-			writeErr(w, 409, "tai khoan nay da duoc cap quyen dung app roi")
-			return
-		}
-
-		qi := fmt.Sprintf(`
-			INSERT INTO %s.dbo.UserAppRole (EmployeeCode, AppKey, Role)
-			VALUES (?, 'bdscDailyReport', 'Viewer')`, e.AssetDBName)
-		if _, err := e.DB.ExecContext(r.Context(), qi, empCode); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		writeJSON(w, 201, map[string]bool{"ok": true})
-	}
-}
-
 type userResp struct {
 	EmployeeCode string `json:"employeeCode"`
 	FullName     string `json:"fullName"`

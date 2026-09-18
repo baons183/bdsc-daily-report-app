@@ -42,7 +42,6 @@
   .btn.danger { background: #c0392b; padding: 4px 10px; font-size: 12px; }
   #bootScreen, #noRoleScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
   #loginBox { background: #fff; padding: 30px; border-radius: 8px; width: 320px; box-shadow: 0 2px 8px rgba(0,0,0,.15); text-align: center; }
-  #noRoleErr { color: #c0392b; font-size: 13px; min-height: 16px; }
   .thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 3px; margin: 2px; }
   .kpi-table { text-align: center; }
   .kpi-table th { text-align: center; vertical-align: middle; }
@@ -70,9 +69,7 @@
 <div id="noRoleScreen" hidden>
   <div id="loginBox">
     <h2>Chưa được cấp quyền</h2>
-    <p style="font-size:13px; color:#555">Tài khoản <b id="noRoleWho"></b> đã đăng nhập qua Portal, nhưng chưa được cấp quyền dùng app Báo cáo ngày. Bấm bên dưới để tự cấp quyền xem (Viewer: xem Báo cáo ngày/tuần) — cần thêm quyền nhập liệu thì liên hệ Admin.</p>
-    <div id="noRoleErr"></div>
-    <button class="btn" style="width:100%" onclick="submitSsoRegister()">Đăng ký dùng app này</button>
+    <p style="font-size:13px; color:#555">Tài khoản <b id="noRoleWho"></b> đã đăng nhập qua Portal, nhưng chưa được cấp quyền dùng app Báo cáo ngày. Vui lòng liên hệ Admin để được cấp quyền.</p>
   </div>
 </div>
 
