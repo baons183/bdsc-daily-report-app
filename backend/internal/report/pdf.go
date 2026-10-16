@@ -600,7 +600,7 @@ func (b *builder) sectionCongViec(rows []models.CongViec) {
 	for _, c := range rows {
 		data = append(data, []string{strconv.Itoa(c.TT), c.ThietBi, c.DM, c.NoiDung, c.KeHoach, fmtFloat(c.TienDo), c.HomNay, c.NgayMai})
 	}
-	b.table(headers, widths, data)
+	b.table(headers, widths, data, "Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.")
 }
 
 func (b *builder) sectionDeXuat(suco []models.SuCo, giamsat []models.GiamSat, congviec []models.CongViec) {
@@ -622,7 +622,7 @@ func (b *builder) sectionLuuY(suco []models.SuCo, giamsat []models.GiamSat, cong
 	for _, it := range CombineLuuY(suco, giamsat, congviec) {
 		data = append(data, []string{strconv.Itoa(it.TT), it.ThietBi, it.Note})
 	}
-	b.table(headers, widths, data)
+	b.table(headers, widths, data, "Không có đề xuất")
 }
 
 // sectionImages renders the same 3-column table (TT | Nội dung | Hình ảnh)
@@ -653,7 +653,7 @@ func (b *builder) sectionImages(rows []models.CongViec) {
 	pdf := b.pdf
 	if len(photos) == 0 {
 		pdf.SetFont("Times", "I", 10)
-		pdf.CellFormat(usableWidth, 6, "(Không có dữ liệu)", "1", 1, "C", false, 0, "")
+		pdf.CellFormat(usableWidth, 6, "Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.", "1", 1, "C", false, 0, "")
 		pdf.SetFont("Times", "", 11)
 		return
 	}
