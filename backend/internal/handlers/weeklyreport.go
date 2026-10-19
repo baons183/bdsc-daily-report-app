@@ -153,7 +153,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		// Đã sort tăng dần nên bản ghi sau luôn mới hơn hoặc bằng bản trước.
 		latestByKey[key] = c
 		if txt := strings.TrimSpace(c.HomNay); txt != "" {
-			homNayParts[key] = append(homNayParts[key], c.NgayBaoCao.Format("02/01")+": "+txt)
+			homNayParts[key] = append(homNayParts[key], "**"+c.NgayBaoCao.Format("02/01")+"**: "+txt)
 		}
 	}
 	congviecLatest := make([]models.CongViec, 0, len(order))
@@ -161,7 +161,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		c := latestByKey[key]
 		// Chỉ có 1 ngày thì giữ nguyên nội dung gốc, không thêm tiền tố ngày. Sửa lại luôn thêm ngày
 		if parts := homNayParts[key]; len(parts) > 0 {
-			c.HomNay = strings.Join(parts, "\n")
+			c.HomNay = strings.Join(parts, "\n\n")
 		}
 		c.TT = i + 1
 		congviecLatest = append(congviecLatest, c)

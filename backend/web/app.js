@@ -618,7 +618,11 @@ function renderWeeklyReport(d) {
     esc(r.tt), esc(r.thietBi), esc(r.vanDe), esc(r.phuongAn), esc(r.donVi),
     r.thoiHan ? `<span style="white-space:nowrap">${esc(r.thoiHan.substring(0, 10))}</span>` : "",
   ]);
-  const congviecRows = (d.congviec || []).map(c => [c.tt, c.thietBi, c.dm, c.noiDung, c.keHoach, c.tienDo ?? "", c.homNay, c.ngayMai].map(esc));
+  const congviecRows = (d.congviec || []).map(c => [
+  esc(c.tt), esc(c.thietBi), esc(c.dm), esc(c.noiDung), esc(c.keHoach), esc(c.tienDo ?? ""),
+  esc(c.homNay).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>"),
+  esc(c.ngayMai),
+]);
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const images = d.images || [];
@@ -686,7 +690,7 @@ function renderWeeklyReport(d) {
 function rvTable(headers, rows, emptyMsg) {
   if (!rows || rows.length === 0) return `<div class="rv-nodata">${emptyMsg || "(Không có dữ liệu)"}</div>`;
   return `<table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>` +
-    rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("") +
+    rows.map(r => `<tr>${r.map(c => `<td>${String(c ?? "").replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("") +
     `</table>`;
 }
 
