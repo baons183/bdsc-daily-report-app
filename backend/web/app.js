@@ -611,10 +611,6 @@ function renderWeeklyReport(d) {
   const sum = d.sucoSummary || {};
   const cbmList = d.cbm || [];
   const giamsatList = d.giamsat || [];
-  const kpiRows = KPI_CATEGORIES.map(c => {
-    const e = (d.kpi || []).find(k => k.chiTieu === c.chiTieu) || {};
-    return [c.tt, c.nhom, c.chiTieu, c.dvt, e.keHoach ?? 0, e.thucHien ?? 0, e.luyKeThang ?? 0, e.danhGia || "-"].map(esc);
-  });
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
@@ -639,33 +635,31 @@ function renderWeeklyReport(d) {
 
   return `
     <div class="report-view">
-      <div class="rv-heading">Các chỉ số KPI (Kế hoạch/Thực hiện cộng dồn cả khoảng đã chọn; Lũy kế tháng tính đến ngày cuối)</div>
-      <table><tr><th>TT</th><th>Nhóm</th><th>Chỉ tiêu</th><th>ĐVT</th><th>Kế hoạch</th><th>Thực hiện</th><th>Lũy kế tháng</th><th>Đánh giá</th></tr>
-        ${kpiRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}
-      </table>
+      <div class="rv-heading">CÁC CHỈ SỐ KPI</div>
+      ${renderKPITable(d.kpi)}
 
-      <div class="rv-heading">Tổng số Sự cố theo loại</div>
+      <div class="rv-heading">TỔNG SỰ CỐ THEO LOẠI</div>
       <table><tr><th>Accident</th><th>Near Miss</th><th>Technical Event</th><th>Tổng</th></tr>
         <tr><td>${sum["Accident"] ?? 0}</td><td>${sum["Near Miss"] ?? 0}</td><td>${sum["Technical Event"] ?? 0}</td>
           <td>${(sum["Accident"] ?? 0) + (sum["Near Miss"] ?? 0) + (sum["Technical Event"] ?? 0)}</td></tr>
       </table>
 
-      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
+      <div class="rv-heading">CHI TIẾT SỰ CỐ/VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VẬN HÀNH</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
       
-      <div class="rv-heading">Tổng số lượt bất thường phát hiện qua công tác giám sát thiết bị</div>
+      <div class="rv-heading">TỔNG SỐ LƯỢT BẤT THƯỜNG PHÁT HIỆN QUA CÔNG TÁC GIÁM SÁT THIẾT BỊ</div>
       <table><tr><th></th><th>Số lượt</th><th>Số thiết bị</th></tr>
         <tr><td>Giám sát trực tuyến</td><td>${cbmList.length}</td><td>${cbmEquip.size}</td></tr>
         <tr><td>Chẩn đoán chuyên dụng</td><td>${giamsatList.length}</td><td>${giamsatEquip.size}</td></tr>
         <tr><td><b>Tổng</b></td><td><b>${cbmList.length + giamsatList.length}</b></td><td><b>${allEquip.size}</b></td></tr>
       </table>
       ${cbmLevelKeys.length ? `
-      <div class="rv-heading">Giám sát trực tuyến theo mức cảnh báo</div>
+      <div class="rv-heading">GIÁM SÁT ONLINE - SỐ LƯỢT BẤT THƯỜNG THEO MỨC CẢNH BÁO</div>
       <table><tr>${cbmLevelKeys.map(k => `<th>${esc(k)}</th>`).join("")}</tr>
         <tr>${cbmLevelKeys.map(k => `<td>${cbmByLevel[k]}</td>`).join("")}</tr>
       </table>` : ""}
 
-      <div class="rv-heading">GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
+      <div class="rv-heading">GIÁM SÁT ONLINE - DANH SÁCH BẤT THƯỜNG ĐƯỢC PHÁT HIỆN</div>
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
 
       <div class="rv-heading">GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
@@ -674,16 +668,16 @@ function renderWeeklyReport(d) {
       <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
       ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
 
-      <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
+      <div class="rv-heading">KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC TRỌNG TÂM</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
 
-      <div class="rv-heading">Vấn đề cần đề xuất</div>
+      <div class="rv-heading">VẤN ĐỀ CẦN ĐỀ XUẤT</div>
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
 
-      <div class="rv-heading">Lưu ý quan trọng</div>
+      <div class="rv-heading">LƯU Ý QUAN TRỌNG</div>
       ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows,"Không có đề xuất.")}
 
-      <div class="rv-heading">Một số hình ảnh thực hiện công việc tại hiện trường</div>
+      <div class="rv-heading">MỘT SỐ HÌNH ẢNH THỰC HIỆN CÔNG VIỆC TẠI HIỆN TRƯỜNG</div>
       ${renderImagesTable(images)}
     </div>
   `;
@@ -694,6 +688,22 @@ function rvTable(headers, rows, emptyMsg) {
   return `<table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>` +
     rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("") +
     `</table>`;
+}
+
+// Bảng KPI gộp ô TT/Nhóm theo groupSize, giống PDF/email.
+function renderKPITable(kpiData) {
+  const rows = KPI_CATEGORIES.map(c => {
+    const e = (kpiData || []).find(k => k.chiTieu === c.chiTieu) || {};
+    const groupCells = c.groupSize
+      ? `<td rowspan="${c.groupSize}" style="vertical-align:middle">${c.tt}</td><td rowspan="${c.groupSize}" style="vertical-align:middle">${esc(c.nhom)}</td>`
+      : "";
+    return `<tr>${groupCells}
+      <td>${esc(c.chiTieu)}</td><td>${esc(c.dvt)}</td>
+      <td>${esc(e.keHoach ?? 0)}</td><td>${esc(e.thucHien ?? 0)}</td>
+      <td>${esc(e.luyKeThang ?? 0)}</td><td>${esc(e.danhGia || "-")}</td>
+    </tr>`;
+  }).join("");
+  return `<table><tr><th>TT</th><th>Nhóm</th><th>Chỉ tiêu</th><th>ĐVT</th><th>Kế hoạch</th><th>Thực hiện</th><th>Lũy kế tháng</th><th>Đánh giá</th></tr>${rows}</table>`;
 }
 
 // Bảng ảnh 3 cột (TT | Nội dung | Hình ảnh), gộp ô TT/Nội dung theo nhóm ảnh
@@ -774,10 +784,6 @@ async function doRejectReport() {
 }
 
 function renderReportView(d) {
-  const kpiRows = KPI_CATEGORIES.map(c => {
-    const e = (d.kpi || []).find(k => k.chiTieu === c.chiTieu) || {};
-    return [c.tt, c.nhom, c.chiTieu, c.dvt, e.keHoach ?? 0, e.thucHien ?? 0, e.luyKeThang ?? 0, e.danhGia || "-"].map(esc);
-  });
   const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
   const cbmRows = (d.cbm || []).map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
   const giamsatRows = (d.giamSat || []).map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
@@ -798,9 +804,7 @@ function renderReportView(d) {
       <p class="rv-meta">Ngày: ${esc(d.runAt)} — Dữ liệu từ ${esc(d.start)} đến ${esc(d.end)}</p>
 
       <div class="rv-heading">1. CÁC CHỈ SỐ KPI</div>
-      <table><tr><th>TT</th><th>Nhóm</th><th>Chỉ tiêu</th><th>ĐVT</th><th>Kế hoạch</th><th>Thực hiện</th><th>Lũy kế tháng</th><th>Đánh giá</th></tr>
-        ${kpiRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}
-      </table>
+      ${renderKPITable(d.kpi)}
 
       <div class="rv-heading">2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
