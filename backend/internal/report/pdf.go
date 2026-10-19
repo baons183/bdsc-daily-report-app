@@ -542,7 +542,7 @@ func (b *builder) sectionKPI(rows []models.KPIEntry) {
 }
 
 func (b *builder) sectionSuCo(rows []models.SuCo) {
-	b.heading("3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
+	b.heading("2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
 	groups := []groupedHeader{
 		{Label: "TT"}, {Label: "Thiết bị"}, {Label: "DM"}, {Label: "Tình trạng"},
 		{Label: "Thời gian dừng (h)", Sub: []string{"PX (h)", "TB (h)"}},
@@ -560,7 +560,7 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 }
 
 func (b *builder) sectionCBM(rows []models.CBMRow) {
-	b.subheading("2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)")
+	b.subheading("3.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)")
 	headers := []string{"TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"}
 	widths := []float64{8, 20, 26, 32, 50, 27, 27}
 	var data [][]string
@@ -571,7 +571,7 @@ func (b *builder) sectionCBM(rows []models.CBMRow) {
 }
 
 func (b *builder) sectionGiamSat(rows []models.GiamSat) {
-	b.subheading("2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG")
+	b.subheading("3.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG")
 	headers := []string{"TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"}
 	widths := []float64{8, 24, 12, 40, 30, 42, 20, 14}
 	var data [][]string
@@ -582,7 +582,7 @@ func (b *builder) sectionGiamSat(rows []models.GiamSat) {
 }
 
 func (b *builder) sectionReliability(rows []models.Reliability) {
-	b.subheading("2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ")
+	b.subheading("3.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ")
 	headers := []string{"TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"}
 	widths := []float64{10, 28, 55, 55, 28, 14}
 	var data [][]string
@@ -763,13 +763,14 @@ func Generate(cfg BuildInput) (string, error) {
 	b.letterhead(reportDate.Format("02/01/2006"), dispStart.Format("15:04 02/01"), dispEnd.Format("15:04 02/01"))
 
 	b.sectionKPI(cfg.KPI)
-	b.heading("2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
+	b.sectionSuCo(cfg.SuCo)
+	b.heading("3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
 	b.sectionCBM(cfg.CBM)
 	b.pdf.Ln(2)
 	b.sectionGiamSat(cfg.GiamSat)
 	b.pdf.Ln(2)
 	b.sectionReliability(cfg.Reliability)
-	b.sectionSuCo(cfg.SuCo)
+
 	b.sectionCongViec(cfg.CongViec)
 	b.sectionDeXuat(cfg.SuCo, cfg.GiamSat, cfg.CongViec)
 	b.sectionLuuY(cfg.SuCo, cfg.GiamSat, cfg.CongViec)

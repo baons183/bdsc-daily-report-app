@@ -650,7 +650,10 @@ function renderWeeklyReport(d) {
           <td>${(sum["Accident"] ?? 0) + (sum["Near Miss"] ?? 0) + (sum["Technical Event"] ?? 0)}</td></tr>
       </table>
 
-      <div class="rv-heading">Tổng số lượt giám sát thiết bị</div>
+      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
+      
+      <div class="rv-heading">Tổng số lượt bất thường phát hiện qua công tác giám sát thiết bị</div>
       <table><tr><th></th><th>Số lượt</th><th>Số thiết bị</th></tr>
         <tr><td>Giám sát trực tuyến</td><td>${cbmList.length}</td><td>${cbmEquip.size}</td></tr>
         <tr><td>Chẩn đoán chuyên dụng</td><td>${giamsatList.length}</td><td>${giamsatEquip.size}</td></tr>
@@ -671,9 +674,6 @@ function renderWeeklyReport(d) {
       <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
       ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
 
-      <div class="rv-heading">Chi tiết Sự cố, vấn đề kỹ thuật ảnh hưởng vận hành</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
-
       <div class="rv-heading">Kết quả thực hiện công việc BDSC quan trọng (mỗi thiết bị + phòng chỉ lấy dòng của ngày mới nhất)</div>
       ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
 
@@ -681,7 +681,7 @@ function renderWeeklyReport(d) {
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
 
       <div class="rv-heading">Lưu ý quan trọng</div>
-      ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows)}
+      ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows,"Không có đề xuất.")}
 
       <div class="rv-heading">Một số hình ảnh thực hiện công việc tại hiện trường</div>
       ${renderImagesTable(images)}
@@ -802,16 +802,16 @@ function renderReportView(d) {
         ${kpiRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}
       </table>
 
-      <div class="rv-heading">2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
-      <div class="rv-sub">2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
-      ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows,"Các thiết bị hoạt động ổn định.")}
-      <div class="rv-sub">2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
-      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows,"Các thiết bị hoạt động ổn định.")}
-      <div class="rv-sub">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
-      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows,"Các thiết bị hoạt động ổn định.")}
-
-      <div class="rv-heading">3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
+      <div class="rv-heading">2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
+
+      <div class="rv-heading">3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
+      <div class="rv-sub">3.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
+      ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows,"Các thiết bị hoạt động ổn định.")}
+      <div class="rv-sub">3.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows,"Các thiết bị hoạt động ổn định.")}
+      <div class="rv-sub">3.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows,"Các thiết bị hoạt động ổn định.")}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÁC CÔNG VIỆC TRỌNG TÂM</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows, "Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.")}

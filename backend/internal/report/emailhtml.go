@@ -33,8 +33,8 @@ func RenderEmailHTML(data BuildInput, pdfLinkURL string) string {
 	fmt.Fprintf(&b, `<ul><li><a href="%s">%s</a></li></ul>`, html.EscapeString(pdfLinkURL), html.EscapeString(linkLabel))
 
 	emailKPISection(&b, data.KPI)
-	emailGiamSatSection(&b, data.CBM, data.GiamSat, data.Reliability)
 	emailSuCoSection(&b, data.SuCo)
+	emailGiamSatSection(&b, data.CBM, data.GiamSat, data.Reliability)
 	emailCongViecSection(&b, data.CongViec)
 	emailNotesSection(&b, "5. VẤN ĐỀ CẦN ĐỀ XUẤT", "Đề xuất", "Không có đề xuất.", CombineDeXuat(data.SuCo, data.GiamSat, data.CongViec))
 	emailNotesSection(&b, "6. LƯU Ý QUAN TRỌNG", "Lưu ý", "Các thiết bị hoạt động ổn định.", CombineLuuY(data.SuCo, data.GiamSat, data.CongViec))
@@ -107,7 +107,7 @@ func emailKPISection(b *strings.Builder, rows []models.KPIEntry) {
 }
 
 func emailSuCoSection(b *strings.Builder, rows []models.SuCo) {
-	emailHeading(b, "3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
+	emailHeading(b, "2. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX")
 	if len(rows) == 0 {
 		emailEmptyMsg(b, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")
 		return
@@ -123,8 +123,8 @@ func emailSuCoSection(b *strings.Builder, rows []models.SuCo) {
 }
 
 func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []models.GiamSat, reliability []models.Reliability) {
-	emailHeading(b, "2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
-	fmt.Fprintf(b, `<p style="margin:6px 0;font-weight:bold;">2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</p>`)
+	emailHeading(b, "3. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ")
+	fmt.Fprintf(b, `<p style="margin:6px 0;font-weight:bold;">3.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</p>`)
 	if len(cbm) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 	} else {
@@ -136,7 +136,7 @@ func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []mode
 		}
 		b.WriteString(`</table>`)
 	}
-	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</p>`)
+	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">3.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</p>`)
 	if len(giamsat) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 	} else {
@@ -148,7 +148,7 @@ func emailGiamSatSection(b *strings.Builder, cbm []models.CBMRow, giamsat []mode
 		}
 		b.WriteString(`</table>`)
 	}
-	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</p>`)
+	fmt.Fprintf(b, `<p style="margin:12px 0 6px;font-weight:bold;">3.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</p>`)
 	if len(reliability) == 0 {
 		emailEmptyMsg(b, "Các thiết bị hoạt động ổn định.")
 		return
