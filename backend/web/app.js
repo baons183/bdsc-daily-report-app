@@ -699,7 +699,7 @@ function rvTable(headers, rows, emptyMsg) {
 // Bảng ảnh 3 cột (TT | Nội dung | Hình ảnh), gộp ô TT/Nội dung theo nhóm ảnh
 // liên tiếp cùng thiết bị — khớp đúng bố cục bảng ảnh trong PDF.
 function renderImagesTable(images) {
-  if (!images || images.length === 0) return `<div class="rv-nodata">(Không có dữ liệu)</div>`;
+  if (!images || images.length === 0) return `<div class="rv-nodata">Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.</div>`;
   const groups = [];
   images.forEach(img => {
     const last = groups[groups.length - 1];
@@ -804,23 +804,23 @@ function renderReportView(d) {
 
       <div class="rv-heading">2. KẾT QUẢ GIÁM SÁT, CHẨN ĐOÁN THIẾT BỊ</div>
       <div class="rv-sub">2.1. GIÁM SÁT TRỰC TUYẾN (ONLINE MONITORING)</div>
-      ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
+      ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows,"Các thiết bị hoạt động ổn định.")}
       <div class="rv-sub">2.2. GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
-      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows,"Các thiết bị hoạt động ổn định.")}
       <div class="rv-sub">2.3. VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
-      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows,"Các thiết bị hoạt động ổn định.")}
 
       <div class="rv-heading">3. SỰ CỐ, VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VHSX</div>
       ${rvTable(["TT", "Thiết bị", "DM", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
 
       <div class="rv-heading">4. KẾT QUẢ THỰC HIỆN CÁC CÔNG VIỆC TRỌNG TÂM</div>
-      ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
+      ${rvTable(["TT", "Thiết bị", "DM", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows, "Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.")}
 
       <div class="rv-heading">5. VẤN ĐỀ CẦN ĐỀ XUẤT</div>
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
 
       <div class="rv-heading">6. LƯU Ý QUAN TRỌNG</div>
-      ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows)}
+      ${rvTable(["TT", "Thiết bị", "Lưu ý"], luuyRows,"Không có đề xuất.")}
 
       <div class="rv-heading">7. MỘT SỐ HÌNH ẢNH THỰC HIỆN CÔNG VIỆC TẠI HIỆN TRƯỜNG</div>
       ${renderImagesTable(images)}
