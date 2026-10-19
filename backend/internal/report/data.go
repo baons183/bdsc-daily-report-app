@@ -266,15 +266,18 @@ func FetchWeeklyKPI(ctx context.Context, db *sql.DB, start, end time.Time) ([]mo
 
 	out := make([]models.KPIEntry, 0, len(kpiCategories))
 	for _, cat := range kpiCategories {
-		var khSum sql.NullFloat64
-		if err := db.QueryRowContext(ctx, `
-SELECT SUM(KeHoach) FROM dbo.KPIEntries WHERE ChiTieu = ? AND NgayBaoCao >= ? AND NgayBaoCao <= ?`,
-			cat.ChiTieu, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&khSum); err != nil {
+		var khVal sql.NullFloat64
+		err := db.QueryRowContext(ctx, `
+		SELECT TOP 1 KeHoach FROM dbo.KPIEntries
+		WHERE ChiTieu = ? AND NgayBaoCao >= ? AND NgayBaoCao <= ?
+		ORDER BY NgayBaoCao DESC`,
+			cat.ChiTieu, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&khVal)
+		if err != nil && err != sql.ErrNoRows {
 			return nil, err
 		}
 		keHoach := 0.0
-		if khSum.Valid {
-			keHoach = khSum.Float64
+		if khVal.Valid {
+			keHoach = khVal.Float64
 		}
 
 		thucHien, err := rangeThucHien(cat.ChiTieu, start, end)
