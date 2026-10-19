@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"bdscdailyreport/internal/db"
@@ -133,20 +135,36 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 	// ngày MỚI NHẤT cho mỗi cặp đó, phản ánh đúng tình trạng hiện tại thay
 	// vì lặp lại từng ngày. Hình ảnh thì vẫn giữ đầy đủ mọi ngày (tư liệu
 	// hiện trường, không phải "trạng thái" nên không gộp).
+	// Sắp xếp theo ngày tăng dần để gộp "Hôm nay" đúng thứ tự thời gian.
+	sorted := make([]models.CongViec, len(congviecAll))
+	copy(sorted, congviecAll)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].NgayBaoCao.Before(sorted[j].NgayBaoCao)
+	})
+
 	latestByKey := map[string]models.CongViec{}
+	homNayParts := map[string][]string{}
 	order := []string{}
-	for _, c := range congviecAll {
+	for _, c := range sorted {
 		key := c.ThietBi + "|" + c.DM
-		if existing, ok := latestByKey[key]; !ok || c.NgayBaoCao.After(existing.NgayBaoCao) {
-			if !ok {
-				order = append(order, key)
-			}
-			latestByKey[key] = c
+		if _, ok := latestByKey[key]; !ok {
+			order = append(order, key)
+		}
+		// Đã sort tăng dần nên bản ghi sau luôn mới hơn hoặc bằng bản trước.
+		latestByKey[key] = c
+		if txt := strings.TrimSpace(c.HomNay); txt != "" {
+			homNayParts[key] = append(homNayParts[key], c.NgayBaoCao.Format("02/01")+": "+txt)
 		}
 	}
 	congviecLatest := make([]models.CongViec, 0, len(order))
-	for _, key := range order {
-		congviecLatest = append(congviecLatest, latestByKey[key])
+	for i, key := range order {
+		c := latestByKey[key]
+		// Chỉ có 1 ngày thì giữ nguyên nội dung gốc, không thêm tiền tố ngày. Sửa lại luôn thêm ngày
+		if parts := homNayParts[key]; len(parts) > 0 {
+			c.HomNay = strings.Join(parts, "\n")
+		}
+		c.TT = i + 1
+		congviecLatest = append(congviecLatest, c)
 	}
 
 	summary := map[string]int{"Accident": 0, "Near Miss": 0, "Technical Event": 0}

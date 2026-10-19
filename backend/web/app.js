@@ -669,7 +669,7 @@ function renderWeeklyReport(d) {
       ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
 
       <div class="rv-heading">KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC TRỌNG TÂM</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Hôm nay", "Ngày mai"], congviecRows)}
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Đã thực hiện", "Ngày mai"], congviecRows)}
 
       <div class="rv-heading">VẤN ĐỀ CẦN ĐỀ XUẤT</div>
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}
