@@ -91,6 +91,7 @@ func parseSection(path, startMarker, endMarker string) ([]Row, error) {
 	var rows []Row
 	collecting := false
 	done := false
+	bounds := defaultColumnBounds
 	for pageNum := 1; pageNum <= r.NumPage() && !done; pageNum++ {
 		page := r.Page(pageNum)
 		if page.V.IsNull() {
@@ -114,7 +115,15 @@ func parseSection(path, startMarker, endMarker string) ([]Row, error) {
 			}
 			windowWords = append(windowWords, w)
 		}
-		rows = append(rows, rowsFromWords(windowWords)...)
+		// Recalibrate from this page's own header row if present (usually
+		// only the first page of the table has one) — keeps working even
+		// if BSR rescales the export again, instead of silently bucketing
+		// every column from wherever it drifted into the last one (see
+		// calibrateColumnBounds's comment on the 07/10/2026 incident).
+		if b := calibrateColumnBounds(windowWords); b != nil {
+			bounds = b
+		}
+		rows = append(rows, rowsFromWords(windowWords, bounds)...)
 	}
 	return rows, nil
 }
@@ -161,31 +170,69 @@ func wordsFromPage(page pdf.Page) []word {
 	return words
 }
 
-// columnOf buckets an X position into one of IV.2's 8 columns (No.,
-// Depart., Tag name, Issue/Observation, Mitigation plan, Action by, Due
-// Date, Action status) — boundaries taken from the actual column
-// x-positions BSR's export places header/cell text at, roughly halfway
-// between each pair of adjacent columns so minor per-line offsets within
-// a wrapped cell still land in the right bucket.
-func columnOf(x float64) int {
-	switch {
-	case x < 70:
-		return 0
-	case x < 110:
-		return 1
-	case x < 205:
-		return 2
-	case x < 300:
-		return 3
-	case x < 450:
-		return 4
-	case x < 495:
-		return 5
-	case x < 560:
-		return 6
-	default:
-		return 7
+// defaultColumnBounds are IV.2's 8 columns' boundaries (No., Depart., Tag
+// name, Issue/Observation, Mitigation plan, Action by, Due Date, Action
+// status) as last observed in BSR's export — used only as a fallback for a
+// page whose own header row can't be found (calibrateColumnBounds returns
+// nil), since BSR has already changed this export's scale/margins at least
+// once before (see calibrateColumnBounds's comment) and a hardcoded table
+// alone silently misparses every row the moment it drifts again.
+var defaultColumnBounds = []float64{70, 110, 205, 300, 450, 495, 560}
+
+// columnOf buckets an X position into one of the 8 columns using bounds (7
+// boundary values separating 8 columns, increasing) — roughly halfway
+// between each pair of adjacent columns so minor per-line offsets within a
+// wrapped cell still land in the right bucket.
+func columnOf(x float64, bounds []float64) int {
+	for i, b := range bounds {
+		if x < b {
+			return i
+		}
 	}
+	return len(bounds)
+}
+
+// calibrateColumnBounds derives this page's own column boundaries from
+// wherever its header row's 8 labels actually sit, instead of trusting a
+// hardcoded pixel table tuned to one past export — BSR has already
+// reflowed this report at least once (around 07/10/2026, every column
+// from "Action by" onward shifted ~30% right, which silently made
+// FilterByDepartment drop every single row for ~2 weeks since none of
+// their real department codes landed in the Action by bucket anymore).
+// Returns nil if the header row isn't present on this page/word set (most
+// pages of a multi-page table only have it once) — the caller keeps
+// whatever bounds it last calibrated, or defaultColumnBounds if none yet.
+func calibrateColumnBounds(words []word) []float64 {
+	// "Action status" wraps onto 2 lines ("Action" / "status") — keep
+	// whichever of the two is seen first; they sit at virtually the same X.
+	labelX := map[string]float64{}
+	for _, w := range words {
+		text := cleanText(w.S)
+		switch text {
+		case "No", "Depart.", "Tag name", "Issue/ Observation", "Mitigation plan", "Action by", "Due Date":
+			if _, ok := labelX[text]; !ok {
+				labelX[text] = w.X
+			}
+		case "Action", "status", "Action status":
+			if _, ok := labelX["Action status"]; !ok {
+				labelX["Action status"] = w.X
+			}
+		}
+	}
+	order := []string{"No", "Depart.", "Tag name", "Issue/ Observation", "Mitigation plan", "Action by", "Due Date", "Action status"}
+	xs := make([]float64, len(order))
+	for i, label := range order {
+		x, ok := labelX[label]
+		if !ok {
+			return nil
+		}
+		xs[i] = x
+	}
+	bounds := make([]float64, len(xs)-1)
+	for i := 0; i < len(bounds); i++ {
+		bounds[i] = (xs[i] + xs[i+1]) / 2
+	}
+	return bounds
 }
 
 var rowNumberRe = regexp.MustCompile(`^\d+$`)
@@ -211,9 +258,10 @@ var headerLabels = map[string]bool{
 	"No": true, "Depart.": true, "Tag name": true,
 	"Issue/ Observation": true, "Mitigation plan": true,
 	"Action by": true, "Due Date": true, "Action": true, "status": true,
+	"Action status": true,
 }
 
-func rowsFromWords(words []word) []Row {
+func rowsFromWords(words []word, bounds []float64) []Row {
 	data := make([]word, 0, len(words))
 	for _, w := range words {
 		if !headerLabels[cleanText(w.S)] {
@@ -223,7 +271,7 @@ func rowsFromWords(words []word) []Row {
 
 	var markerYs []float64
 	for _, w := range data {
-		if columnOf(w.X) == 0 && rowNumberRe.MatchString(cleanText(w.S)) {
+		if columnOf(w.X, bounds) == 0 && rowNumberRe.MatchString(cleanText(w.S)) {
 			markerYs = append(markerYs, w.Y)
 		}
 	}
@@ -233,7 +281,7 @@ func rowsFromWords(words []word) []Row {
 
 	rows := make([]Row, len(markerYs))
 	for _, w := range data {
-		col := columnOf(w.X)
+		col := columnOf(w.X, bounds)
 		if col == 0 {
 			continue // the row-number itself carries no field data
 		}
