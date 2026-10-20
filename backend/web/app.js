@@ -15,7 +15,7 @@ const TRANG_THAI = {
   in_progress: "Đang thực hiện",
   done: "Hoàn thành",
 };
-function trangThaiLabel(v) { return TRANG_THAI[v] || TRANG_THAI.not_started; }
+function trangThaiLabel(v) { return TRANG_THAI[v] || TRANG_THAI.in_progress; }
 
 
 let TOKEN = localStorage.getItem("bdsc_token") || "";
@@ -424,9 +424,11 @@ document.getElementById("form-congviec").addEventListener("submit", async e => {
 
 // ---- Giám sát trực tuyến (CBM) — chỉ xem, dữ liệu tự động từ hệ thống ngoài ----
 // Chỉ GiamSat/Moderator/Approver/Admin mới được tick "Đưa vào báo cáo" —
-// khớp đúng luật phía server (SetCBMExclusion), tab CBM thì ai đăng nhập
+// khớp đúng luật phía server (SetCBMInclusion), tab CBM thì ai đăng nhập
 // cũng xem được (role: null) nhưng quyết định dữ liệu nào vào báo cáo thật
-// thì không phải hành động chỉ-xem.
+// thì không phải hành động chỉ-xem. Mặc định KHÔNG đưa vào báo cáo (r.included
+// = false) — phải tick mới đưa vào, ngược với trước đây (mặc định có, tick
+// để loại ra).
 function canToggleCBMInclude() {
   return hasRole("GiamSat") || hasRole("Moderator") || hasRole("Approver");
 }
@@ -453,7 +455,7 @@ async function toggleCBMInclude(idx, included) {
   const r = (window.CBM_ROWS_CACHE || [])[idx];
   if (!r) return;
   try {
-    await api("/api/cbm/exclude", {
+    await api("/api/cbm/include", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tagname: r.tagname, description: r.description, dataTime: r.dataTime, included }),
@@ -487,15 +489,40 @@ async function loadRSMReview() {
   const date = document.getElementById("rsm-date").value;
   const rows = (await api("/api/reliability?date=" + encodeURIComponent(date))) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
+  // Mặc định chỉ hiện những dòng đã tick "Đưa vào báo cáo" — dòng bị loại
+  // vẫn còn trong ROWS_CACHE/API, chỉ ẩn khỏi bảng trừ khi người dùng tự
+  // bật lại ô "Hiện cả dòng không đưa vào báo cáo" để tìm và tick lại.
+  const showExcluded = document.getElementById("rsm-show-excluded").checked;
+  const visible = showExcluded ? rows : rows.filter(r => r.included);
   const t = document.getElementById("table-rsm");
   t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Trạng thái</th><th>Đưa vào báo cáo</th><th></th></tr>" +
-    rows.map(r => `<tr>
+    visible.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
-      <td>${esc(trangThaiLabel(r.trangThai))}</td>
+      <td>${trangThaiSelect(r)}</td>
       <td style="text-align:center">${reliabilityIncludeCheckbox(r)}</td>
       <td>${reliabilityActionButtons(r)}</td>
     </tr>`).join("");
+}
+// Đổi trạng thái ngay tại bảng (cạnh checkbox "Đưa vào báo cáo"), không
+// cần bấm Sửa — cùng quyền sửa/xoá dòng (canEditReliability).
+function trangThaiSelect(r) {
+  const disabled = canEditReliability(r.createdBy) ? "" : "disabled";
+  const cur = r.trangThai || "in_progress";
+  const opt = v => `<option value="${v}" ${cur === v ? "selected" : ""}>${trangThaiLabel(v)}</option>`;
+  return `<select ${disabled} onchange="setReliabilityTrangThai(${r.id}, this.value)">${["not_started", "in_progress", "done"].map(opt).join("")}</select>`;
+}
+async function setReliabilityTrangThai(id, trangThai) {
+  try {
+    await api(`/api/reliability/${id}/trangthai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trangThai }),
+    });
+  } catch (e) {
+    alert("Lỗi: " + e.message);
+    loadRSMReview();
+  }
 }
 // Dòng tự động lấy từ RSM PDF có createdBy rỗng (không thuộc về ai cụ
 // thể) — cho phép bất kỳ ai có quyền GiamSat sửa/xoá, khác với các bảng
@@ -632,7 +659,7 @@ function filterByTrangThai(rows) {
   const checked = [...document.querySelectorAll(".weekly-status-cb:checked")].map(cb => cb.value);
   if (checked.length === 3) return rows; // tat ca deu tick - khong can loc
   const want = new Set(checked);
-  return rows.filter(r => want.has(r.trangThai || "not_started"));
+  return rows.filter(r => want.has(r.trangThai || "in_progress"));
 }
 
 function renderWeeklyReport(d) {

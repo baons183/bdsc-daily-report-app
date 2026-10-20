@@ -97,7 +97,7 @@
         <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
         <label>Trạng thái thực hiện<select name="trangThai">
           <option value="not_started">Chưa thực hiện</option>
-          <option value="in_progress">Đang thực hiện</option>
+          <option value="in_progress" selected>Đang thực hiện</option>
           <option value="done">Hoàn thành</option>
         </select></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
@@ -116,7 +116,7 @@
         <label>Thời hạn<input name="thoiHan" type="date"></label>
         <label>Trạng thái thực hiện<select name="trangThai">
           <option value="not_started">Chưa thực hiện</option>
-          <option value="in_progress">Đang thực hiện</option>
+          <option value="in_progress" selected>Đang thực hiện</option>
           <option value="done">Hoàn thành</option>
         </select></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
@@ -124,6 +124,10 @@
       <div style="margin-bottom:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <label>Chọn ngày: <input type="date" id="rsm-date"></label>
         <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
+        <label style="font-weight:normal; display:inline-flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="rsm-show-excluded" onchange="loadRSMReview()">
+          Hiện cả những dòng không đưa vào báo cáo
+        </label>
       </div>
       <div style="overflow-x:auto"><table id="table-rsm"></table></div>
     </section>
@@ -145,7 +149,7 @@
         <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
         <label>Trạng thái thực hiện<select name="trangThai">
           <option value="not_started">Chưa thực hiện</option>
-          <option value="in_progress">Đang thực hiện</option>
+          <option value="in_progress" selected>Đang thực hiện</option>
           <option value="done">Hoàn thành</option>
         </select></label>
         <label class="full">Hình ảnh<input name="photos" type="file" multiple accept="image/*"></label>
@@ -234,7 +238,7 @@
           <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
           <label>Trạng thái thực hiện<select name="trangThai">
             <option value="not_started">Chưa thực hiện</option>
-            <option value="in_progress">Đang thực hiện</option>
+            <option value="in_progress" selected>Đang thực hiện</option>
             <option value="done">Hoàn thành</option>
           </select></label>
           <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>

@@ -13,10 +13,10 @@ import (
 )
 
 // cbmRowResp is models.CBMRow plus whether the row is currently ticked
-// "đưa vào báo cáo" — Included is always true unless a user has explicitly
-// unticked this exact row (dbo.CBMExclusions), so the CBM tab can show its
-// checkbox state while report generation (report.FilterCBMExcluded) drops
-// the row entirely.
+// "đưa vào báo cáo" — Included is false by default and only true once a
+// user has explicitly ticked this exact row (dbo.CBMInclusions), so the
+// CBM tab can show its checkbox state while report generation
+// (report.FilterCBMIncluded) keeps only rows ticked in.
 type cbmRowResp struct {
 	models.CBMRow
 	Included bool `json:"included"`
@@ -27,7 +27,7 @@ type cbmRowResp struct {
 // section 3.1 of that day's PDF — data itself comes entirely from the
 // external online-monitoring system's Excel export, not anything users
 // enter in this app, but each row's "đưa vào báo cáo" checkbox IS editable
-// here (see SetCBMExclusion).
+// here (see SetCBMInclusion).
 func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 	runAt := time.Now()
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
@@ -41,48 +41,48 @@ func (e *Env) ListCBM(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	start, end := window.ReportWindow(runAt, rh, rm)
 	rows := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
-	excluded, err := db.GetCBMExclusionSet(e.DB)
+	included, err := db.GetCBMInclusionSet(e.DB)
 	if err != nil {
-		excluded = map[string]bool{}
+		included = map[string]bool{}
 	}
 	out := make([]cbmRowResp, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, cbmRowResp{
 			CBMRow:   row,
-			Included: !excluded[models.CBMExclusionKey(row.Tagname, row.Description, row.DataTime)],
+			Included: included[models.CBMRowKey(row.Tagname, row.Description, row.DataTime)],
 		})
 	}
 	writeJSON(w, 200, out)
 }
 
-type setCBMExclusionReq struct {
+type setCBMInclusionReq struct {
 	Tagname     string    `json:"tagname"`
 	Description string    `json:"description"`
 	DataTime    time.Time `json:"dataTime"`
 	Included    bool      `json:"included"`
 }
 
-// SetCBMExclusion lets a user tick/untick whether one specific CBM alarm
+// SetCBMInclusion lets a user tick/untick whether one specific CBM alarm
 // row is included the next time a report is generated (PDF/email/Thống
 // kê/Báo cáo tuần) — the raw CBM tab itself always lists every row
-// regardless of this setting. Restricted to GiamSat/Moderator/Approver
-// (Admin always passes via auth.HasRole's own bypass) — the CBM tab itself
-// has no role gate (role: null, so even a view-only registered account
-// sees it), but deciding what goes in the actual report is not a
-// view-only action.
-func (e *Env) SetCBMExclusion(w http.ResponseWriter, r *http.Request) {
+// regardless of this setting (unticked by default). Restricted to
+// GiamSat/Moderator/Approver (Admin always passes via auth.HasRole's own
+// bypass) — the CBM tab itself has no role gate (role: null, so even a
+// view-only registered account sees it), but deciding what goes in the
+// actual report is not a view-only action.
+func (e *Env) SetCBMInclusion(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	if user == nil || !(auth.HasRole(user.Roles, "GiamSat") || auth.HasRole(user.Roles, "Moderator") || auth.HasRole(user.Roles, "Approver")) {
 		writeErr(w, 403, "ban khong co quyen chon dua/khong dua du lieu nay vao bao cao")
 		return
 	}
-	var in setCBMExclusionReq
+	var in setCBMInclusionReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Tagname == "" {
 		writeErr(w, 400, "du lieu khong hop le")
 		return
 	}
 	updatedBy := user.EmployeeCode
-	if err := db.SetCBMExclusion(e.DB, in.Tagname, in.Description, in.DataTime, !in.Included, updatedBy); err != nil {
+	if err := db.SetCBMInclusion(e.DB, in.Tagname, in.Description, in.DataTime, in.Included, updatedBy); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

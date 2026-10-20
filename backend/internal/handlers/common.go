@@ -63,17 +63,19 @@ FROM dbo.%s t JOIN ordered o ON t.Id = o.Id`, table, table)
 }
 
 // normalizeTrangThai maps any "trạng thái thực hiện" value coming from the
-// client to one of the 3 fixed states, falling back to "not_started" for
-// anything unrecognized (empty string included) — every Create/Update for
-// SuCo/GiamSat/CongViec/Reliability runs its input through this before
-// writing, so the column never holds a value the UI (app.js TRANG_THAI map)
-// wouldn't know how to label.
+// client to one of the 3 fixed states, falling back to "in_progress" for
+// anything unrecognized (empty string included) — a freshly entered row is
+// assumed to already be underway rather than not started, matching how
+// people actually use these tabs (they're reporting work happening today).
+// Every Create/Update for SuCo/GiamSat/CongViec/Reliability runs its input
+// through this before writing, so the column never holds a value the UI
+// (app.js TRANG_THAI map) wouldn't know how to label.
 func normalizeTrangThai(s string) string {
 	switch s {
-	case "in_progress", "done":
+	case "not_started", "done":
 		return s
 	}
-	return "not_started"
+	return "in_progress"
 }
 
 func currentUser(r *http.Request) *auth.Claims {

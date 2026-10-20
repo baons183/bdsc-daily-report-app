@@ -180,7 +180,7 @@ type setReliabilityIncludeReq struct {
 // (ThietBi, VanDe) key would no longer match anything, see
 // report.SyncReliabilityFromRSM). Same permission model as edit/delete
 // (canTouchReliability); no checkNotLocked here, matching CBM's own
-// SetCBMExclusion — the same lightweight, always-adjustable mechanism.
+// SetCBMInclusion — the same lightweight, always-adjustable mechanism.
 func (e *Env) SetReliabilityInclude(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
@@ -203,6 +203,50 @@ func (e *Env) SetReliabilityInclude(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.Reliability SET Included = ? WHERE Id = ?`, in.Included, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+type setReliabilityTrangThaiReq struct {
+	TrangThai string `json:"trangThai"`
+}
+
+// SetReliabilityTrangThai changes "trạng thái thực hiện" for one row inline
+// from the Reliability tab's own table — right next to the "Đưa vào báo
+// cáo" checkbox — without going through the full Sửa form. Same permission
+// model as edit/delete (canTouchReliability), and unlike
+// SetReliabilityInclude this DOES check checkNotLocked: it's changing real
+// report data (same as UpdateReliability), not just a lightweight
+// in/out-of-report toggle.
+func (e *Env) SetReliabilityTrangThai(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeErr(w, 400, "id khong hop le")
+		return
+	}
+	var createdBy string
+	var ngayBaoCao time.Time
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.Reliability WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
+		writeErr(w, 404, "khong tim thay dong nay")
+		return
+	}
+	if !canTouchReliability(r, createdBy) {
+		writeErr(w, 403, "ban khong co quyen doi trang thai dong nay")
+		return
+	}
+	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
+		return
+	}
+	var in setReliabilityTrangThaiReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
+		return
+	}
+	trangThai := normalizeTrangThai(in.TrangThai)
+	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.Reliability SET TrangThai = ? WHERE Id = ?`, trangThai, id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

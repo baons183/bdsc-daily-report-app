@@ -232,12 +232,12 @@ CREATE TABLE dbo.ReportApprovals (
   UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 
--- Alarm rows a user has unticked "đưa vào báo cáo" for in the Giám sát
--- trực tuyến tab — identified by the same Tagname+Description+DataTime
--- triple dedupeByTagnameEarliest already collapsed repeats down to (see
--- models.CBMExclusionKey). A row here is filtered OUT of the actual report
--- (PDF/email/Thống kê/Báo cáo tuần) but still shown, unchecked, on the raw
--- CBM tab itself so it can be re-included later.
+-- Superseded by dbo.CBMInclusions below (the "đưa vào báo cáo" default
+-- flipped from opt-out to opt-in) — left in place, unused, rather than
+-- dropped, since whatever was recorded here no longer has any meaning
+-- under the new opt-in model (nothing to migrate: the rows it held were
+-- the few a user had manually EXCLUDED out of a mostly-included default,
+-- which doesn't translate into "rows to include" under the new default).
 IF OBJECT_ID('dbo.CBMExclusions', 'U') IS NULL
 CREATE TABLE dbo.CBMExclusions (
   Id INT IDENTITY PRIMARY KEY,
@@ -246,6 +246,23 @@ CREATE TABLE dbo.CBMExclusions (
   DataTime DATETIME NOT NULL,
   ExcludedBy NVARCHAR(50) NULL,
   ExcludedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+-- Alarm rows a user has explicitly TICKED "đưa vào báo cáo" for in the
+-- Giám sát trực tuyến tab — identified by the same Tagname+Description+
+-- DataTime triple dedupeByTagnameEarliest already collapsed repeats down
+-- to (see models.CBMRowKey). Opt-in: a row is left OUT of the actual
+-- report (PDF/email/Thống kê/Báo cáo tuần) by default and only kept if a
+-- row for it exists here — the reverse of the old CBMExclusions model,
+-- where everything was in by default and a row there meant "leave out".
+IF OBJECT_ID('dbo.CBMInclusions', 'U') IS NULL
+CREATE TABLE dbo.CBMInclusions (
+  Id INT IDENTITY PRIMARY KEY,
+  Tagname NVARCHAR(200) NOT NULL,
+  Description NVARCHAR(500) NOT NULL,
+  DataTime DATETIME NOT NULL,
+  IncludedBy NVARCHAR(50) NULL,
+  IncludedAt DATETIME NOT NULL DEFAULT GETDATE()
 );
 
 -- Report section "3.3. Vấn đề khác liên quan tới độ tin cậy và toàn vẹn
@@ -284,15 +301,18 @@ ALTER TABLE dbo.Reliability ADD Included BIT NOT NULL DEFAULT 1;
 -- "Trạng thái thực hiện" (not_started/in_progress/done) added to every
 -- actionable section of the report — Sự cố, Giám sát (offline), Công việc,
 -- Reliability — so Báo cáo tuần can show and filter by it. Default
--- 'not_started' means existing rows need no backfill.
+-- 'in_progress' means existing rows need no backfill (this column default
+-- only matters for a row inserted by raw SQL outside the app — every
+-- Create/Update in this codebase passes TrangThai explicitly via
+-- handlers.normalizeTrangThai, whose own fallback is the same value).
 IF COL_LENGTH('dbo.SuCo', 'TrangThai') IS NULL
-ALTER TABLE dbo.SuCo ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+ALTER TABLE dbo.SuCo ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 IF COL_LENGTH('dbo.GiamSat', 'TrangThai') IS NULL
-ALTER TABLE dbo.GiamSat ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+ALTER TABLE dbo.GiamSat ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 IF COL_LENGTH('dbo.CongViec', 'TrangThai') IS NULL
-ALTER TABLE dbo.CongViec ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+ALTER TABLE dbo.CongViec ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 IF COL_LENGTH('dbo.Reliability', 'TrangThai') IS NULL
-ALTER TABLE dbo.Reliability ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+ALTER TABLE dbo.Reliability ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 `
 
 func Migrate(conn *sql.DB) error {

@@ -87,8 +87,10 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cbm := report.ReadCBMExcel(e.effectiveCBMExcelPath(), start, end)
-	if excluded, err := db.GetCBMExclusionSet(e.DB); err == nil {
-		cbm = report.FilterCBMExcluded(cbm, excluded)
+	if included, err := db.GetCBMInclusionSet(e.DB); err == nil {
+		cbm = report.FilterCBMIncluded(cbm, included)
+	} else {
+		cbm = nil
 	}
 	if cbm == nil {
 		cbm = []models.CBMRow{}
@@ -100,15 +102,16 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		reliability = report.FilterReliabilityIncluded(reliability)
 	}
 
-	// Một vấn đề (ThietBi/tag + VanDe) được CarryForwardReliability chép lại
-	// mỗi ngày cho tới khi được giải quyết, nên trong khoảng nhiều ngày của
-	// Báo cáo tuần, cùng 1 tag name sẽ lặp lại 1 dòng cho mỗi ngày còn mở —
-	// chỉ giữ lại đúng bản ghi của ngày MỚI NHẤT cho mỗi cặp đó, cùng cách
-	// làm với bảng Công việc ở trên.
+	// Một vấn đề được CarryForwardReliability chép lại mỗi ngày cho tới khi
+	// được giải quyết, nên trong khoảng nhiều ngày của Báo cáo tuần, cùng 1
+	// tag name sẽ lặp lại 1 dòng cho mỗi ngày còn mở — chỉ giữ lại đúng bản
+	// ghi của ngày MỚI NHẤT cho mỗi TAG NAME (không phải từng cặp Tag+Vấn đề
+	// — 1 tag chỉ hiện 1 dòng duy nhất trong Báo cáo tuần, cùng cách làm với
+	// bảng Công việc ở trên).
 	reliabilityLatestByKey := map[string]models.Reliability{}
 	reliabilityOrder := []string{}
 	for _, r := range reliability {
-		key := r.ThietBi + "|" + r.VanDe
+		key := r.ThietBi
 		if existing, ok := reliabilityLatestByKey[key]; !ok || r.NgayBaoCao.After(existing.NgayBaoCao) {
 			if !ok {
 				reliabilityOrder = append(reliabilityOrder, key)

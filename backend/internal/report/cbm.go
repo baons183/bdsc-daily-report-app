@@ -128,21 +128,19 @@ func dedupeByTagnameEarliest(rows []models.CBMRow) []models.CBMRow {
 	return out
 }
 
-// FilterCBMExcluded drops any row a user has unticked "đưa vào báo cáo"
-// for (dbo.CBMExclusions, via excluded — see db.GetCBMExclusionSet) —
-// applied only when building an actual report (PDF/email/Thống kê/Báo cáo
-// tuần), never on the raw CBM tab list itself, so an excluded row can
-// still be seen (unchecked) and re-included later.
-func FilterCBMExcluded(rows []models.CBMRow, excluded map[string]bool) []models.CBMRow {
-	if len(excluded) == 0 {
-		return rows
-	}
+// FilterCBMIncluded keeps only rows a user has explicitly ticked "đưa vào
+// báo cáo" for (dbo.CBMInclusions, via included — see
+// db.GetCBMInclusionSet) — opt-in, so a row with nothing recorded is left
+// out by default. Applied only when building an actual report (PDF/email/
+// Thống kê/Báo cáo tuần), never on the raw CBM tab list itself, which shows
+// every row regardless (unchecked by default) so one can still be ticked
+// in later.
+func FilterCBMIncluded(rows []models.CBMRow, included map[string]bool) []models.CBMRow {
 	out := make([]models.CBMRow, 0, len(rows))
 	for _, r := range rows {
-		if excluded[models.CBMExclusionKey(r.Tagname, r.Description, r.DataTime)] {
-			continue
+		if included[models.CBMRowKey(r.Tagname, r.Description, r.DataTime)] {
+			out = append(out, r)
 		}
-		out = append(out, r)
 	}
 	return out
 }

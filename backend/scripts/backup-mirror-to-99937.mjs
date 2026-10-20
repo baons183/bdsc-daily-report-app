@@ -35,7 +35,7 @@ import sql from "mssql";
 const TABLES = [
   "Users",
   "SuCo", "GiamSat", "CongViec", "CongViecAttachments", "Reliability", "KPIEntries",
-  "ReportRuns", "ReportApprovals", "CBMExclusions",
+  "ReportRuns", "ReportApprovals", "CBMExclusions", "CBMInclusions",
   "ScheduleOverrides", "KPIBaseline", "ReportSchedule", "AppSettings"
 ];
 

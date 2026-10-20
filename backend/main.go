@@ -42,7 +42,7 @@ func main() {
 	authMw := auth.Middleware(cfg.JWTSecret)
 	mux.Handle("GET /api/assets/search", authMw(http.HandlerFunc(env.SearchAssets)))
 	mux.Handle("GET /api/cbm", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.ListCBM))))
-	mux.Handle("POST /api/cbm/exclude", authMw(http.HandlerFunc(env.SetCBMExclusion)))
+	mux.Handle("POST /api/cbm/include", authMw(http.HandlerFunc(env.SetCBMInclusion)))
 	mux.Handle("GET /api/report/view", authMw(http.HandlerFunc(env.GetReportView)))
 	mux.Handle("GET /api/report/weekly", authMw(http.HandlerFunc(env.GetWeeklyReport)))
 
@@ -89,6 +89,7 @@ func main() {
 	mux.Handle("PUT /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.UpdateReliability))))
 	mux.Handle("DELETE /api/reliability/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteReliability))))
 	mux.Handle("POST /api/reliability/{id}/include", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.SetReliabilityInclude))))
+	mux.Handle("POST /api/reliability/{id}/trangthai", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.SetReliabilityTrangThai))))
 
 	mux.Handle("GET /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.GetSendAllDays))))
 	mux.Handle("POST /api/send-all-days", authMw(http.HandlerFunc(auth.RequireRole("Admin", env.SetSendAllDays))))
