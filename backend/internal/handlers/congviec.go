@@ -106,13 +106,14 @@ func (e *Env) CreateCongViec(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		createdBy = user.EmployeeCode
 	}
+	trangThai := normalizeTrangThai(r.FormValue("trangThai"))
 	var newID int64
 	err = tx.QueryRowContext(r.Context(), `
-INSERT INTO dbo.CongViec (TT, ThietBi, DM, NoiDung, KeHoach, TienDo, HomNay, NgayMai, DeXuat, LuuY, NgayBaoCao, CreatedBy)
+INSERT INTO dbo.CongViec (TT, ThietBi, DM, NoiDung, KeHoach, TienDo, HomNay, NgayMai, DeXuat, LuuY, NgayBaoCao, CreatedBy, TrangThai)
 OUTPUT CAST(INSERTED.Id AS BIGINT)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		tt, thietBi, r.FormValue("dm"), r.FormValue("noiDung"), r.FormValue("keHoach"), tienDo,
-		r.FormValue("homNay"), r.FormValue("ngayMai"), r.FormValue("deXuat"), r.FormValue("luuY"), now, createdBy).Scan(&newID)
+		r.FormValue("homNay"), r.FormValue("ngayMai"), r.FormValue("deXuat"), r.FormValue("luuY"), now, createdBy, trangThai).Scan(&newID)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -133,7 +134,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	out := models.CongViec{
 		Id: int(newID), TT: tt, ThietBi: thietBi, DM: r.FormValue("dm"), NoiDung: r.FormValue("noiDung"),
 		KeHoach: r.FormValue("keHoach"), TienDo: tienDo, HomNay: r.FormValue("homNay"), NgayMai: r.FormValue("ngayMai"),
-		DeXuat: r.FormValue("deXuat"), LuuY: r.FormValue("luuY"), NgayBaoCao: now, CreatedBy: createdBy,
+		DeXuat: r.FormValue("deXuat"), LuuY: r.FormValue("luuY"), NgayBaoCao: now, CreatedBy: createdBy, TrangThai: trangThai,
 	}
 	out.Attachments = e.loadAttachments(r, out.Id)
 	writeJSON(w, 201, out)
@@ -260,10 +261,10 @@ func (e *Env) UpdateCongViec(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(r.Context(), `
-UPDATE dbo.CongViec SET ThietBi=?, DM=?, NoiDung=?, KeHoach=?, TienDo=?, HomNay=?, NgayMai=?, DeXuat=?, LuuY=?
+UPDATE dbo.CongViec SET ThietBi=?, DM=?, NoiDung=?, KeHoach=?, TienDo=?, HomNay=?, NgayMai=?, DeXuat=?, LuuY=?, TrangThai=?
 WHERE Id=?`,
 		thietBi, r.FormValue("dm"), r.FormValue("noiDung"), r.FormValue("keHoach"), tienDo,
-		r.FormValue("homNay"), r.FormValue("ngayMai"), r.FormValue("deXuat"), r.FormValue("luuY"), id); err != nil {
+		r.FormValue("homNay"), r.FormValue("ngayMai"), r.FormValue("deXuat"), r.FormValue("luuY"), normalizeTrangThai(r.FormValue("trangThai")), id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

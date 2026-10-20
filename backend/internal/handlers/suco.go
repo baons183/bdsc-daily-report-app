@@ -71,12 +71,13 @@ func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		createdBy = user.EmployeeCode
 	}
+	in.TrangThai = normalizeTrangThai(in.TrangThai)
 	var newID int64
 	err = tx.QueryRowContext(r.Context(), `
-INSERT INTO dbo.SuCo (TT, ThietBi, DM, LoaiSuCo, TinhTrang, ThoiGianDungPX, ThoiGianDungTB, PhuongAn, DonVi, ThoiHan, DeXuat, LuuY, NgayBaoCao, CreatedBy)
+INSERT INTO dbo.SuCo (TT, ThietBi, DM, LoaiSuCo, TinhTrang, ThoiGianDungPX, ThoiGianDungTB, PhuongAn, DonVi, ThoiHan, DeXuat, LuuY, NgayBaoCao, CreatedBy, TrangThai)
 OUTPUT CAST(INSERTED.Id AS BIGINT)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		tt, in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, now, createdBy).Scan(&newID)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tt, in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, now, createdBy, in.TrangThai).Scan(&newID)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -157,9 +158,9 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := e.DB.ExecContext(r.Context(), `
-UPDATE dbo.SuCo SET ThietBi=?, DM=?, LoaiSuCo=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?
+UPDATE dbo.SuCo SET ThietBi=?, DM=?, LoaiSuCo=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?, TrangThai=?
 WHERE Id=?`,
-		in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, id); err != nil {
+		in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

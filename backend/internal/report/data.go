@@ -19,7 +19,7 @@ import (
 func FetchSuCo(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.SuCo, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(LoaiSuCo,''), ISNULL(TinhTrang,''), ThoiGianDungPX, ThoiGianDungTB,
-       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
+       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,''), TrangThai
 FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
@@ -29,7 +29,7 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, windo
 	for rows.Next() {
 		var s models.SuCo
 		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.LoaiSuCo, &s.TinhTrang, &s.ThoiGianDungPX, &s.ThoiGianDungTB,
-			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
+			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy, &s.TrangThai); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -47,7 +47,7 @@ FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, windo
 func FetchGiamSat(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.GiamSat, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(TinhTrang,''), ISNULL(RuiRo,''),
-       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
+       ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,''), TrangThai
 FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, wi
 	for rows.Next() {
 		var s models.GiamSat
 		if err := rows.Scan(&s.Id, &s.TT, &s.ThietBi, &s.DM, &s.TinhTrang, &s.RuiRo,
-			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy); err != nil {
+			&s.PhuongAn, &s.DonVi, &s.ThoiHan, &s.DeXuat, &s.LuuY, &s.NgayBaoCao, &s.CreatedBy, &s.TrangThai); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -76,7 +76,7 @@ FROM dbo.GiamSat WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, wi
 func FetchCongViec(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.CongViec, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT Id, TT, ThietBi, ISNULL(DM,''), ISNULL(NoiDung,''), ISNULL(KeHoach,''), TienDo,
-       ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,'')
+       ISNULL(HomNay,''), ISNULL(NgayMai,''), ISNULL(DeXuat,''), ISNULL(LuuY,''), NgayBaoCao, ISNULL(CreatedBy,''), TrangThai
 FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ FROM dbo.CongViec WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, w
 	for rows.Next() {
 		var c models.CongViec
 		if err := rows.Scan(&c.Id, &c.TT, &c.ThietBi, &c.DM, &c.NoiDung, &c.KeHoach, &c.TienDo,
-			&c.HomNay, &c.NgayMai, &c.DeXuat, &c.LuuY, &c.NgayBaoCao, &c.CreatedBy); err != nil {
+			&c.HomNay, &c.NgayMai, &c.DeXuat, &c.LuuY, &c.NgayBaoCao, &c.CreatedBy, &c.TrangThai); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

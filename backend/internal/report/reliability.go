@@ -23,7 +23,7 @@ import (
 // FetchCongViec; the stored TT value in the DB is untouched.
 func FetchReliability(ctx context.Context, db *sql.DB, start, end time.Time) ([]models.Reliability, error) {
 	rows, err := db.QueryContext(ctx, `
-SELECT Id, TT, ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, NgayBaoCao, ISNULL(CreatedBy,''), Included
+SELECT Id, TT, ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, NgayBaoCao, ISNULL(CreatedBy,''), Included, TrangThai
 FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`, window.SQL(start), window.SQL(end))
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`
 	out := []models.Reliability{}
 	for rows.Next() {
 		var r models.Reliability
-		if err := rows.Scan(&r.Id, &r.TT, &r.ThietBi, &r.VanDe, &r.PhuongAn, &r.DonVi, &r.ThoiHan, &r.NgayBaoCao, &r.CreatedBy, &r.Included); err != nil {
+		if err := rows.Scan(&r.Id, &r.TT, &r.ThietBi, &r.VanDe, &r.PhuongAn, &r.DonVi, &r.ThoiHan, &r.NgayBaoCao, &r.CreatedBy, &r.Included, &r.TrangThai); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -94,21 +94,21 @@ func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
 // Best-effort: any error here is swallowed, same as SyncReliabilityFromRSM
 // — this convenience should never block viewing or generating the report.
 func CarryForwardReliability(db *sql.DB, yStart, yEnd, start, end time.Time) {
-	yRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, Included
+	yRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, Included, TrangThai
 FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
 		window.SQL(yStart), window.SQL(yEnd))
 	if err != nil {
 		return
 	}
 	type row struct {
-		thietBi, vanDe, phuongAn, donVi string
-		thoiHan                         sql.NullTime
-		included                        bool
+		thietBi, vanDe, phuongAn, donVi, trangThai string
+		thoiHan                                    sql.NullTime
+		included                                   bool
 	}
 	var yesterday []row
 	for yRows.Next() {
 		var r row
-		if yRows.Scan(&r.thietBi, &r.vanDe, &r.phuongAn, &r.donVi, &r.thoiHan, &r.included) == nil {
+		if yRows.Scan(&r.thietBi, &r.vanDe, &r.phuongAn, &r.donVi, &r.thoiHan, &r.included, &r.trangThai) == nil {
 			yesterday = append(yesterday, r)
 		}
 	}
@@ -136,7 +136,7 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
 		if existing[key] {
 			continue
 		}
-		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, start, end) {
+		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, r.trangThai, start, end) {
 			existing[key] = true
 		}
 	}
@@ -195,7 +195,7 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 			thoiHan = sql.NullTime{Time: dt, Valid: true}
 		}
 		donVi := rsm.KeepDepartmentTokens(r.ActionBy, rsm.DepartmentKeywords)
-		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, start, end) {
+		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, "not_started", start, end) {
 			existing[key] = true // in case the PDF itself lists the same issue twice
 		}
 	}
@@ -208,7 +208,7 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 // on the same TT. included is set explicitly rather than left to the
 // column's own DB default, since CarryForwardReliability needs to persist
 // a previously-excluded issue's Included=0 across days (see its comment).
-func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, included bool, start, end time.Time) bool {
+func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, included bool, trangThai string, start, end time.Time) bool {
 	tx, err := db.Begin()
 	if err != nil {
 		return false
@@ -219,8 +219,8 @@ func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, th
 		window.SQL(start), window.SQL(end)).Scan(&count); err != nil {
 		return false
 	}
-	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, Included) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?)`,
-		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start, included); err != nil {
+	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, Included, TrangThai) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?)`,
+		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start, included, trangThai); err != nil {
 		return false
 	}
 	return tx.Commit() == nil

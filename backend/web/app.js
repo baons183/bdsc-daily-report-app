@@ -10,6 +10,14 @@ const KPI_CATEGORIES = [
   { tt: 3, nhom: "Hỏng thiết bị", chiTieu: "Dừng ngoài kế hoạch", dvt: "Vụ", groupSize: 1 },
 ];
 
+const TRANG_THAI = {
+  not_started: "Chưa thực hiện",
+  in_progress: "Đang thực hiện",
+  done: "Hoàn thành",
+};
+function trangThaiLabel(v) { return TRANG_THAI[v] || TRANG_THAI.not_started; }
+
+
 let TOKEN = localStorage.getItem("bdsc_token") || "";
 let ROLES = localStorage.getItem("bdsc_roles") || "";
 let FULLNAME = localStorage.getItem("bdsc_fullname") || "";
@@ -260,12 +268,12 @@ async function loadSuCo() {
   ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-suco");
   t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
-      <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
+      <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${r.thoiGianDungPX ?? ""}</td><td>${r.thoiGianDungTB ?? ""}</td>
       <td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
-      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td>
+      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td>${actionButtons("SuCo", r)}</td>
     </tr>`).join("");
 }
@@ -276,7 +284,7 @@ function editSuCo(id) {
     thietBi: r.thietBi, dm: r.dm, loaiSuCo: r.loaiSuCo, tinhTrang: r.tinhTrang,
     thoiGianDungPX: r.thoiGianDungPX ?? "", thoiGianDungTB: r.thoiGianDungTB ?? "",
     phuongAn: r.phuongAn, donVi: r.donVi, thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "",
-    deXuat: r.deXuat, luuY: r.luuY,
+    deXuat: r.deXuat, luuY: r.luuY, trangThai: r.trangThai,
   });
 }
 document.getElementById("form-suco").addEventListener("submit", async e => {
@@ -304,11 +312,11 @@ async function loadGiamSat() {
   ROWS_CACHE.giamsat = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-giamsat");
   t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
-      <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th></th></tr>` +
+      <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${esc(r.ruiRo)}</td><td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
-      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td>
+      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td>${actionButtons("GiamSat", r)}</td>
     </tr>`).join("");
 }
@@ -318,7 +326,7 @@ function editGiamSat(id) {
   enterEditMode(document.getElementById("form-giamsat"), id, {
     thietBi: r.thietBi, dm: r.dm, tinhTrang: r.tinhTrang, ruiRo: r.ruiRo,
     phuongAn: r.phuongAn, donVi: r.donVi, thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "",
-    deXuat: r.deXuat, luuY: r.luuY,
+    deXuat: r.deXuat, luuY: r.luuY, trangThai: r.trangThai,
   });
 }
 document.getElementById("form-giamsat").addEventListener("submit", async e => {
@@ -347,10 +355,10 @@ async function loadCongViecToday() {
   ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-congviec");
   t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
-      <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Ảnh</th><th></th></tr>` +
+      <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th>Ảnh</th><th></th></tr>` +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? ""}</td>
-      <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td><td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td>
+      <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td><td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td>${(r.attachments||[]).map(a => `<img class="thumb" src="/uploads/${a.filePath}">`).join("")}</td>
       <td>${actionButtons("CongViec", r)}</td>
     </tr>`).join("");
@@ -379,7 +387,7 @@ function reuseCongViecYesterday(id) {
   if (!r) return;
   const form = document.getElementById("form-congviec");
   exitEditMode(form); // đảm bảo không đang ở chế độ Sửa dòng khác - đây luôn là thêm dòng mới
-  ["thietBi", "dm", "noiDung", "keHoach", "tienDo", "homNay", "ngayMai", "deXuat", "luuY"].forEach(k => {
+  ["thietBi", "dm", "noiDung", "keHoach", "tienDo", "homNay", "ngayMai", "deXuat", "luuY", "trangThai"].forEach(k => {
     const el = form.elements[k];
     if (el) el.value = r[k] ?? "";
   });
@@ -390,7 +398,7 @@ function editCongViec(id) {
   if (!r) return;
   enterEditMode(document.getElementById("form-congviec"), id, {
     thietBi: r.thietBi, dm: r.dm, noiDung: r.noiDung, keHoach: r.keHoach, tienDo: r.tienDo ?? "",
-    homNay: r.homNay, ngayMai: r.ngayMai, deXuat: r.deXuat, luuY: r.luuY,
+    homNay: r.homNay, ngayMai: r.ngayMai, deXuat: r.deXuat, luuY: r.luuY, trangThai: r.trangThai,
   });
   alert("Ảnh cũ vẫn giữ nguyên. Nếu chọn thêm ảnh mới ở đây, ảnh mới sẽ được thêm vào (không thay ảnh cũ).");
 }
@@ -480,10 +488,11 @@ async function loadRSMReview() {
   const rows = (await api("/api/reliability?date=" + encodeURIComponent(date))) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-rsm");
-  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đưa vào báo cáo</th><th></th></tr>" +
+  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Trạng thái</th><th>Đưa vào báo cáo</th><th></th></tr>" +
     rows.map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
+      <td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td style="text-align:center">${reliabilityIncludeCheckbox(r)}</td>
       <td>${reliabilityActionButtons(r)}</td>
     </tr>`).join("");
@@ -527,7 +536,7 @@ function editReliability(id) {
   if (!r) return;
   enterEditMode(document.getElementById("form-rsm"), id, {
     thietBi: r.thietBi, vanDe: r.vanDe, phuongAn: r.phuongAn, donVi: r.donVi,
-    thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "",
+    thoiHan: r.thoiHan ? r.thoiHan.substring(0, 10) : "", trangThai: r.trangThai,
   });
 }
 document.getElementById("form-rsm").addEventListener("submit", async e => {
@@ -591,6 +600,7 @@ async function initWeeklyReport() {
   return loadWeeklyReport();
 }
 
+let WEEKLY_DATA = null;
 async function loadWeeklyReport() {
   const start = document.getElementById("weekly-start").value;
   const end = document.getElementById("weekly-end").value;
@@ -604,24 +614,43 @@ async function loadWeeklyReport() {
     content.innerHTML = "Lỗi: " + e.message;
     return;
   }
+  WEEKLY_DATA = d;
+  document.querySelectorAll(".weekly-status-cb").forEach(cb => cb.checked = true);
   content.innerHTML = renderWeeklyReport(d);
+}
+
+// Bộ lọc trạng thái (chọn nhiều: Chưa thực hiện/Đang thực hiện/Hoàn thành)
+// áp dụng cho các mục có trạng thái thực hiện (Sự cố, Giám sát offline,
+// Reliability, Công việc) — lọc ngay trên dữ liệu đã tải (WEEKLY_DATA),
+// không gọi lại API. Bỏ tick hết thì không còn dòng nào khớp (đúng nghĩa
+// "không chọn trạng thái nào") thay vì ngầm hiểu là "tất cả".
+function renderWeeklyReportFiltered() {
+  if (!WEEKLY_DATA) return;
+  document.getElementById("weekly-content").innerHTML = renderWeeklyReport(WEEKLY_DATA);
+}
+function filterByTrangThai(rows) {
+  const checked = [...document.querySelectorAll(".weekly-status-cb:checked")].map(cb => cb.value);
+  if (checked.length === 3) return rows; // tat ca deu tick - khong can loc
+  const want = new Set(checked);
+  return rows.filter(r => want.has(r.trangThai || "not_started"));
 }
 
 function renderWeeklyReport(d) {
   const sum = d.sucoSummary || {};
   const cbmList = d.cbm || [];
-  const giamsatList = d.giamsat || [];
-  const sucoRows = (d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
-  const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : ""].map(esc));
+  const giamsatList = filterByTrangThai(d.giamsat || []);
+  const sucoRows = filterByTrangThai(d.suco || []).map(s => [s.tt, s.thietBi, s.dm, s.loaiSuCo, s.tinhTrang, s.thoiGianDungPX ?? "", s.thoiGianDungTB ?? "", s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : "", trangThaiLabel(s.trangThai)].map(esc));
+  const giamsatRows = giamsatList.map(s => [s.tt, s.thietBi, s.dm, s.tinhTrang, s.ruiRo, s.phuongAn, s.donVi, s.thoiHan ? s.thoiHan.substring(0, 10) : "", trangThaiLabel(s.trangThai)].map(esc));
   const cbmRows = cbmList.map((c, i) => [i + 1, fmtDateTime(c.dataTime), c.tagname, c.equipment, c.description, c.alarmValue, c.alarmLevel].map(esc));
-  const reliabilityRows = (d.reliability || []).map(r => [
+  const reliabilityRows = filterByTrangThai(d.reliability || []).map(r => [
     esc(r.tt), esc(r.thietBi), esc(r.vanDe), esc(r.phuongAn), esc(r.donVi),
     r.thoiHan ? `<span style="white-space:nowrap">${esc(r.thoiHan.substring(0, 10))}</span>` : "",
+    esc(trangThaiLabel(r.trangThai)),
   ]);
-  const congviecRows = (d.congviec || []).map(c => [
+  const congviecRows = filterByTrangThai(d.congviec || []).map(c => [
   esc(c.tt), esc(c.thietBi), esc(c.dm), esc(c.noiDung), esc(c.keHoach), esc(c.tienDo ?? ""),
   esc(c.homNay).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>"),
-  esc(c.ngayMai),
+  esc(c.ngayMai), esc(trangThaiLabel(c.trangThai)),
 ]);
   const dexuatRows = (d.deXuat || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
   const luuyRows = (d.luuY || []).map(it => [it.tt, it.thietBi, it.note].map(esc));
@@ -649,7 +678,7 @@ function renderWeeklyReport(d) {
       </table>
 
       <div class="rv-heading">CHI TIẾT SỰ CỐ/VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VẬN HÀNH</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn", "Trạng thái"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
       
       <div class="rv-heading">TỔNG SỐ LƯỢT BẤT THƯỜNG PHÁT HIỆN QUA CÔNG TÁC GIÁM SÁT THIẾT BỊ</div>
       <table><tr><th></th><th>Số lượt</th><th>Số thiết bị</th></tr>
@@ -667,13 +696,13 @@ function renderWeeklyReport(d) {
       ${rvTable(["TT", "Thời gian", "Tagname", "Thiết bị", "Mô tả", "Giá trị cảnh báo", "Mức cảnh báo"], cbmRows)}
 
       <div class="rv-heading">GIÁM SÁT OFFLINE BẰNG THIẾT BỊ CHUYÊN DỤNG/ PHÁT HIỆN TẠI HIỆN TRƯỜNG</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn"], giamsatRows)}
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Tình trạng", "Rủi ro", "Phương án", "Đơn vị", "Thời hạn", "Trạng thái"], giamsatRows)}
 
       <div class="rv-heading">VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG TOÀN VẸN VÀ ĐỘ TIN CẬY THIẾT BỊ</div>
-      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn"], reliabilityRows)}
+      ${rvTable(["TT", "Thiết bị", "Vấn đề phát hiện", "Phương án xử lý", "Đơn vị thực hiện", "Thời hạn", "Trạng thái"], reliabilityRows)}
 
       <div class="rv-heading">KẾT QUẢ THỰC HIỆN CÔNG VIỆC BDSC TRỌNG TÂM</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Đã thực hiện", "Ngày mai"], congviecRows)}
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Nội dung", "Kế hoạch", "Tiến độ (%)", "Đã thực hiện", "Ngày mai", "Trạng thái"], congviecRows)}
 
       <div class="rv-heading">VẤN ĐỀ CẦN ĐỀ XUẤT</div>
       ${rvTable(["TT", "Thiết bị", "Đề xuất"], dexuatRows, "Không có đề xuất.")}

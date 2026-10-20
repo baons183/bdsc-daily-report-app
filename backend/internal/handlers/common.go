@@ -62,6 +62,20 @@ FROM dbo.%s t JOIN ordered o ON t.Id = o.Id`, table, table)
 	return err
 }
 
+// normalizeTrangThai maps any "trạng thái thực hiện" value coming from the
+// client to one of the 3 fixed states, falling back to "not_started" for
+// anything unrecognized (empty string included) — every Create/Update for
+// SuCo/GiamSat/CongViec/Reliability runs its input through this before
+// writing, so the column never holds a value the UI (app.js TRANG_THAI map)
+// wouldn't know how to label.
+func normalizeTrangThai(s string) string {
+	switch s {
+	case "in_progress", "done":
+		return s
+	}
+	return "not_started"
+}
+
 func currentUser(r *http.Request) *auth.Claims {
 	return auth.FromContext(r.Context())
 }

@@ -95,6 +95,11 @@
         <label>Thời hạn<input name="thoiHan" type="date"></label>
         <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
         <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+        <label>Trạng thái thực hiện<select name="trangThai">
+          <option value="not_started">Chưa thực hiện</option>
+          <option value="in_progress">Đang thực hiện</option>
+          <option value="done">Hoàn thành</option>
+        </select></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
 
@@ -109,6 +114,11 @@
         <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
         <label>Đơn vị thực hiện<input name="donVi"></label>
         <label>Thời hạn<input name="thoiHan" type="date"></label>
+        <label>Trạng thái thực hiện<select name="trangThai">
+          <option value="not_started">Chưa thực hiện</option>
+          <option value="in_progress">Đang thực hiện</option>
+          <option value="done">Hoàn thành</option>
+        </select></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
       <div style="margin-bottom:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -133,6 +143,11 @@
         <label class="half">Kế hoạch ngày mai<textarea name="ngayMai"></textarea></label>
         <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
         <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+        <label>Trạng thái thực hiện<select name="trangThai">
+          <option value="not_started">Chưa thực hiện</option>
+          <option value="in_progress">Đang thực hiện</option>
+          <option value="done">Hoàn thành</option>
+        </select></label>
         <label class="full">Hình ảnh<input name="photos" type="file" multiple accept="image/*"></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
@@ -166,6 +181,11 @@
         <label>Từ ngày: <input type="date" id="weekly-start"></label>
         <label>Đến ngày: <input type="date" id="weekly-end"></label>
         <button class="btn" onclick="loadWeeklyReport()" style="margin-top:0">Xem</button>
+        <span>Trạng thái:
+          <label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="weekly-status-cb" value="not_started" checked onchange="renderWeeklyReportFiltered()">Chưa thực hiện</label>
+          <label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="weekly-status-cb" value="in_progress" checked onchange="renderWeeklyReportFiltered()">Đang thực hiện</label>
+          <label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="weekly-status-cb" value="done" checked onchange="renderWeeklyReportFiltered()">Hoàn thành</label>
+        </span>
       </div>
       <div id="weekly-content"></div>
     </section>
@@ -212,6 +232,11 @@
           <label>Thời hạn<input name="thoiHan" type="date"></label>
           <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
           <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
+          <label>Trạng thái thực hiện<select name="trangThai">
+            <option value="not_started">Chưa thực hiện</option>
+            <option value="in_progress">Đang thực hiện</option>
+            <option value="done">Hoàn thành</option>
+          </select></label>
           <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
         </form>
         <div style="overflow-x:auto"><table id="table-suco"></table></div>

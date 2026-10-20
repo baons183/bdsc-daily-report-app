@@ -115,12 +115,13 @@ func (e *Env) CreateReliability(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		createdBy = user.EmployeeCode
 	}
+	in.TrangThai = normalizeTrangThai(in.TrangThai)
 	var newID int64
 	err = tx.QueryRowContext(r.Context(), `
-INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy)
+INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, TrangThai)
 OUTPUT CAST(INSERTED.Id AS BIGINT)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		tt, in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, now, createdBy).Scan(&newID)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tt, in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, now, createdBy, in.TrangThai).Scan(&newID)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -238,9 +239,9 @@ func (e *Env) UpdateReliability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := e.DB.ExecContext(r.Context(), `
-UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?
+UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?, TrangThai=?
 WHERE Id=?`,
-		in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, id); err != nil {
+		in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

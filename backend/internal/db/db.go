@@ -280,6 +280,19 @@ CREATE TABLE dbo.Reliability (
 -- resynced) still deletes for real.
 IF COL_LENGTH('dbo.Reliability', 'Included') IS NULL
 ALTER TABLE dbo.Reliability ADD Included BIT NOT NULL DEFAULT 1;
+
+-- "Trạng thái thực hiện" (not_started/in_progress/done) added to every
+-- actionable section of the report — Sự cố, Giám sát (offline), Công việc,
+-- Reliability — so Báo cáo tuần can show and filter by it. Default
+-- 'not_started' means existing rows need no backfill.
+IF COL_LENGTH('dbo.SuCo', 'TrangThai') IS NULL
+ALTER TABLE dbo.SuCo ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+IF COL_LENGTH('dbo.GiamSat', 'TrangThai') IS NULL
+ALTER TABLE dbo.GiamSat ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+IF COL_LENGTH('dbo.CongViec', 'TrangThai') IS NULL
+ALTER TABLE dbo.CongViec ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
+IF COL_LENGTH('dbo.Reliability', 'TrangThai') IS NULL
+ALTER TABLE dbo.Reliability ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'not_started';
 `
 
 func Migrate(conn *sql.DB) error {

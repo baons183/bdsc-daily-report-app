@@ -26,6 +26,7 @@ type SuCo struct {
 	LuuY           string    `json:"luuY"`
 	NgayBaoCao     time.Time `json:"ngayBaoCao"`
 	CreatedBy      string    `json:"createdBy"`
+	TrangThai      string    `json:"trangThai"`
 }
 
 type GiamSat struct {
@@ -42,6 +43,7 @@ type GiamSat struct {
 	LuuY       string    `json:"luuY"`
 	NgayBaoCao time.Time `json:"ngayBaoCao"`
 	CreatedBy  string    `json:"createdBy"`
+	TrangThai  string    `json:"trangThai"`
 }
 
 type Attachment struct {
@@ -67,6 +69,7 @@ type CongViec struct {
 	NgayBaoCao  time.Time    `json:"ngayBaoCao"`
 	CreatedBy   string       `json:"createdBy"`
 	Attachments []Attachment `json:"attachments"`
+	TrangThai   string       `json:"trangThai"`
 }
 
 type KPIEntry struct {
@@ -127,5 +130,6 @@ type Reliability struct {
 	// report.SyncReliabilityFromRSM — where deleting isn't possible (the
 	// next sync would just reinsert it); a manually typed row keeps its own
 	// Xoá button and this stays true for it always.
-	Included bool `json:"included"`
+	Included  bool   `json:"included"`
+	TrangThai string `json:"trangThai"`
 }
