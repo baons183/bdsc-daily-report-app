@@ -536,16 +536,35 @@ async function loadRSMReview() {
   const url = ranged ? `/api/reliability?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : "/api/reliability";
   const rows = (await api(url)) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
+  RSM_VIEW = { rows, ranged, start, end };
+  renderRSMReview();
+}
+// Dữ liệu lần tải gần nhất — đổi Sắp xếp/Hiện dòng không đưa vào báo cáo
+// chỉ vẽ lại bảng, không gọi lại API (API khoảng ngày còn đồng bộ RSM từng
+// ngày nên tương đối chậm).
+let RSM_VIEW = null;
+function renderRSMReview() {
+  if (!RSM_VIEW) return;
+  const { rows, ranged, start, end } = RSM_VIEW;
+  const note = document.getElementById("rsm-range-note");
   // Mặc định chỉ hiện những dòng đã tick "Đưa vào báo cáo" — dòng bị loại
   // vẫn còn trong ROWS_CACHE/API, chỉ ẩn khỏi bảng trừ khi người dùng tự
   // bật lại ô "Hiện cả dòng không đưa vào báo cáo" để tìm và tick lại.
   const showExcluded = document.getElementById("rsm-show-excluded").checked;
-  const visible = showExcluded ? rows : rows.filter(r => r.included);
+  const visible = showExcluded ? [...rows] : rows.filter(r => r.included);
+  // Theo ngày: ngày báo cáo mới nhất trước (trong cùng ngày giữ thứ tự
+  // server trả về). Theo tag: Tagname A→Z (so số tự nhiên, TK-2 trước
+  // TK-10), cùng tag thì ngày mới nhất trước.
+  const byTag = document.getElementById("rsm-sort").value === "tag";
+  const byDateDesc = (a, b) => (b.reportDate || "").localeCompare(a.reportDate || "");
+  visible.sort(byTag
+    ? (a, b) => a.thietBi.localeCompare(b.thietBi, "vi", { numeric: true, sensitivity: "base" }) || byDateDesc(a, b)
+    : byDateDesc);
   note.textContent = ranged ? `${visible.length} dòng, báo cáo ngày ${fmtDMY(start)} đến ${fmtDMY(end)}` : "Đang hiện ca hiện tại";
   const t = document.getElementById("table-rsm");
   t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Trạng thái</th><th>Đưa vào báo cáo</th><th></th></tr>` +
-    visible.map(r => `<tr>
-      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
+    visible.map((r, i) => `<tr>
+      <td>${ranged || byTag ? i + 1 : r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
       <td>${trangThaiSelect(r)}</td>
       <td style="text-align:center">${reliabilityIncludeCheckbox(r)}</td>

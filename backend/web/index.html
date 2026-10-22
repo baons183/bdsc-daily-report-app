@@ -126,9 +126,13 @@
         <label>đến ngày: <input type="date" id="rsm-end"></label>
         <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
         <button class="btn" type="button" onclick="resetRSMRange()" style="margin-top:0; background:#888">Hôm nay</button>
+        <label>Sắp xếp: <select id="rsm-sort" onchange="renderRSMReview()">
+          <option value="date">Theo ngày báo cáo</option>
+          <option value="tag">Theo Tagname</option>
+        </select></label>
         <span id="rsm-range-note" style="color:#555"></span>
         <label style="font-weight:normal; display:inline-flex; align-items:center; gap:4px;">
-          <input type="checkbox" id="rsm-show-excluded" onchange="loadRSMReview()">
+          <input type="checkbox" id="rsm-show-excluded" onchange="renderRSMReview()">
           Hiện cả những dòng không đưa vào báo cáo
         </label>
       </div>
