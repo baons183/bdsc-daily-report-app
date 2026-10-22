@@ -264,18 +264,41 @@ function exitEditMode(form) {
 async function loadSuCo() {
   // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
   document.getElementById("form-suco").hidden = !hasRole("SuCo");
-  const rows = (await api("/api/suco")) || [];
+  // Không chọn ngày = danh sách của ca hiện tại (như cũ); chọn Từ/Đến ngày
+  // = mọi dòng có Ngày nhập trong khoảng đó, để tìm lại và sửa dòng cũ.
+  const start = document.getElementById("suco-start").value;
+  const end = document.getElementById("suco-end").value;
+  const ranged = !!(start || end);
+  const note = document.getElementById("suco-range-note");
+  if (ranged && !(start && end)) { note.textContent = "Chọn đủ Từ ngày/Đến ngày."; return; }
+  const url = ranged ? `/api/suco?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : "/api/suco";
+  const rows = (await api(url)) || [];
+  note.textContent = ranged ? `${rows.length} dòng từ ${fmtDMY(start)} đến ${fmtDMY(end)}` : "Đang hiện ca hôm nay";
   ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
   const t = document.getElementById("table-suco");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
+  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày nhập</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
       <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
     rows.map(r => `<tr>
-      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
+      <td>${r.tt}</td>${ranged ? `<td>${fmtDMYHM(r.ngayBaoCao)}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${r.thoiGianDungPX ?? ""}</td><td>${r.thoiGianDungTB ?? ""}</td>
       <td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
       <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td>${actionButtons("SuCo", r)}</td>
     </tr>`).join("");
+}
+function resetSuCoRange() {
+  document.getElementById("suco-start").value = "";
+  document.getElementById("suco-end").value = "";
+  loadSuCo();
+}
+function fmtDMY(ymd) {
+  const [y, m, d] = ymd.split("-");
+  return `${d}/${m}/${y}`;
+}
+function fmtDMYHM(iso) {
+  const t = new Date(iso);
+  const p = n => String(n).padStart(2, "0");
+  return `${p(t.getDate())}/${p(t.getMonth() + 1)}/${t.getFullYear()} ${p(t.getHours())}:${p(t.getMinutes())}`;
 }
 function editSuCo(id) {
   const r = ROWS_CACHE.suco[id];

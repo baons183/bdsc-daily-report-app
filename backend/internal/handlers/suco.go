@@ -18,7 +18,35 @@ import (
 // (the file for report date D lands ~06:30, still inside D's still-open
 // window, so opening this tab any time after that picks it up, editable/
 // deletable right here like any manually typed row).
+//
+// With "?start=&end=YYYY-MM-DD" it instead lists every row whose NgayBaoCao
+// falls in that plain calendar range (00:00:00 of start through 23:59:59
+// of end — same convention as Báo cáo tuần), so older rows can be found
+// and edited from this tab; no RSM sync in that mode, since the sync only
+// ever targets the current entry window anyway.
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
+	if startStr, endStr := r.URL.Query().Get("start"), r.URL.Query().Get("end"); startStr != "" || endStr != "" {
+		startD, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
+		endD, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
+		if err1 != nil || err2 != nil {
+			writeErr(w, 400, "start/end khong hop le, can dang YYYY-MM-DD")
+			return
+		}
+		start := startD
+		end := endD.AddDate(0, 0, 1).Add(-time.Second)
+		if end.Before(start) {
+			writeErr(w, 400, "ngay ket thuc phai sau ngay bat dau")
+			return
+		}
+		out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, out)
+		return
+	}
+
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	now := time.Now()
 	start, end := window.EntryWindow(now, rh, rm)
