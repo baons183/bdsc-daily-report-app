@@ -27,6 +27,10 @@ type SuCo struct {
 	NgayBaoCao     time.Time `json:"ngayBaoCao"`
 	CreatedBy      string    `json:"createdBy"`
 	TrangThai      string    `json:"trangThai"`
+	// ReportDate is the printed report date (YYYY-MM-DD) NgayBaoCao falls
+	// under (window.ReportDateForEntry) — filled in only by ListSuCo, for
+	// the tab's "Ngày báo cáo" column.
+	ReportDate string `json:"reportDate,omitempty"`
 }
 
 type GiamSat struct {

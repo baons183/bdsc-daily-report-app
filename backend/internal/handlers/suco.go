@@ -19,12 +19,14 @@ import (
 // window, so opening this tab any time after that picks it up, editable/
 // deletable right here like any manually typed row).
 //
-// With "?start=&end=YYYY-MM-DD" it instead lists every row whose NgayBaoCao
-// falls in that plain calendar range (00:00:00 of start through 23:59:59
-// of end — same convention as Báo cáo tuần), so older rows can be found
-// and edited from this tab; no RSM sync in that mode, since the sync only
-// ever targets the current entry window anyway.
+// With "?start=&end=YYYY-MM-DD" it instead lists every row whose printed
+// report date (window.ReportDateForEntry — the date in the report PDF's
+// own name) falls in that range, inclusive, so older rows can be found and
+// edited from this tab. No RSM sync in that mode, since the sync only ever
+// targets the current entry window anyway.
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
+	rh, rm := db.ReportTime(e.DB, 8, 0)
+	var start, end time.Time
 	if startStr, endStr := r.URL.Query().Get("start"), r.URL.Query().Get("end"); startStr != "" || endStr != "" {
 		startD, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
 		endD, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
@@ -32,33 +34,35 @@ func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, "start/end khong hop le, can dang YYYY-MM-DD")
 			return
 		}
-		start := startD
-		end := endD.AddDate(0, 0, 1).Add(-time.Second)
-		if end.Before(start) {
+		if endD.Before(startD) {
 			writeErr(w, 400, "ngay ket thuc phai sau ngay bat dau")
 			return
 		}
-		out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
-		if err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		writeJSON(w, 200, out)
-		return
+		// Report date D's window is the one the D+1 report run closes.
+		start, _ = window.ReportWindow(reportRunAt(startD, rh, rm), rh, rm)
+		_, end = window.ReportWindow(reportRunAt(endD, rh, rm), rh, rm)
+	} else {
+		now := time.Now()
+		start, end = window.EntryWindow(now, rh, rm)
+		reportDate := window.ReportDateForEntry(now, rh, rm)
+		report.SyncSuCoFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 	}
-
-	rh, rm := db.ReportTime(e.DB, 8, 0)
-	now := time.Now()
-	start, end := window.EntryWindow(now, rh, rm)
-	reportDate := window.ReportDateForEntry(now, rh, rm)
-	report.SyncSuCoFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 
 	out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	for i := range out {
+		out[i].ReportDate = window.ReportDateForEntry(out[i].NgayBaoCao, rh, rm).Format("2006-01-02")
+	}
 	writeJSON(w, 200, out)
+}
+
+// reportRunAt is when the report for report date d is generated: d+1 at
+// the configured report time.
+func reportRunAt(d time.Time, rh, rm int) time.Time {
+	return time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local).AddDate(0, 0, 1)
 }
 
 func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
