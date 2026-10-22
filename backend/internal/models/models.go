@@ -136,4 +136,8 @@ type Reliability struct {
 	// Xoá button and this stays true for it always.
 	Included  bool   `json:"included"`
 	TrangThai string `json:"trangThai"`
+	// ReportDate is the printed report date (YYYY-MM-DD) NgayBaoCao falls
+	// under — filled in only by ListReliability, for the tab's "Ngày báo
+	// cáo" column.
+	ReportDate string `json:"reportDate,omitempty"`
 }

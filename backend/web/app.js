@@ -520,29 +520,42 @@ function fmtDateTime(iso) {
 // không còn cơ chế tick "đưa vào báo cáo" riêng nữa (xoá dòng là cách
 // duy nhất để bỏ nó khỏi báo cáo).
 async function initRSMReview() {
-  const dateInput = document.getElementById("rsm-date");
-  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
   return loadRSMReview();
 }
+// Không chọn ngày = ca hiện tại (như các tab nhập liệu khác); chọn Từ/Đến
+// ngày = mọi dòng có Ngày báo cáo (ngày in trên tên file báo cáo) trong
+// khoảng đó — mỗi ngày là 1 bộ dòng riêng (vấn đề còn mở được chuyển tiếp
+// sang ngày sau), nên cùng 1 tag có thể hiện nhiều lần, mỗi lần 1 ngày.
 async function loadRSMReview() {
   document.getElementById("form-rsm").hidden = !hasRole("GiamSat");
-  const date = document.getElementById("rsm-date").value;
-  const rows = (await api("/api/reliability?date=" + encodeURIComponent(date))) || [];
+  const start = document.getElementById("rsm-start").value;
+  const end = document.getElementById("rsm-end").value;
+  const ranged = !!(start || end);
+  const note = document.getElementById("rsm-range-note");
+  if (ranged && !(start && end)) { note.textContent = "Chọn đủ Từ ngày/Đến ngày."; return; }
+  const url = ranged ? `/api/reliability?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : "/api/reliability";
+  const rows = (await api(url)) || [];
   ROWS_CACHE.rsm = Object.fromEntries(rows.map(r => [r.id, r]));
   // Mặc định chỉ hiện những dòng đã tick "Đưa vào báo cáo" — dòng bị loại
   // vẫn còn trong ROWS_CACHE/API, chỉ ẩn khỏi bảng trừ khi người dùng tự
   // bật lại ô "Hiện cả dòng không đưa vào báo cáo" để tìm và tick lại.
   const showExcluded = document.getElementById("rsm-show-excluded").checked;
   const visible = showExcluded ? rows : rows.filter(r => r.included);
+  note.textContent = ranged ? `${visible.length} dòng, báo cáo ngày ${fmtDMY(start)} đến ${fmtDMY(end)}` : "Đang hiện ca hiện tại";
   const t = document.getElementById("table-rsm");
-  t.innerHTML = "<tr><th>TT</th><th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Trạng thái</th><th>Đưa vào báo cáo</th><th></th></tr>" +
+  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Tagname</th><th>Vấn đề phát hiện</th><th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Trạng thái</th><th>Đưa vào báo cáo</th><th></th></tr>` +
     visible.map(r => `<tr>
-      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
+      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.vanDe)}</td><td>${esc(r.phuongAn)}</td>
       <td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0, 10) : ""}</td>
       <td>${trangThaiSelect(r)}</td>
       <td style="text-align:center">${reliabilityIncludeCheckbox(r)}</td>
       <td>${reliabilityActionButtons(r)}</td>
     </tr>`).join("");
+}
+function resetRSMRange() {
+  document.getElementById("rsm-start").value = "";
+  document.getElementById("rsm-end").value = "";
+  loadRSMReview();
 }
 // Đổi trạng thái ngay tại bảng (cạnh checkbox "Đưa vào báo cáo"), không
 // cần bấm Sửa — cùng quyền sửa/xoá dòng (canEditReliability).
@@ -617,10 +630,11 @@ document.getElementById("form-rsm").addEventListener("submit", async e => {
   } else {
     await api("/api/reliability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     form.reset();
-    // Dòng mới luôn thuộc cửa sổ "hôm nay" (server dùng window.EntryWindow),
-    // bất kể đang lọc xem ngày nào - nhảy bộ lọc về hôm nay để dòng vừa
-    // thêm hiện ra ngay, thay vì "biến mất" nếu đang xem 1 ngày cũ.
-    document.getElementById("rsm-date").value = new Date().toISOString().slice(0, 10);
+    // Dòng mới luôn thuộc ca hiện tại (server dùng window.EntryWindow), bất
+    // kể đang lọc xem khoảng ngày nào - xoá bộ lọc về ca hiện tại để dòng
+    // vừa thêm hiện ra ngay, thay vì "biến mất" nếu đang xem ngày cũ.
+    document.getElementById("rsm-start").value = "";
+    document.getElementById("rsm-end").value = "";
   }
   loadRSMReview();
 });

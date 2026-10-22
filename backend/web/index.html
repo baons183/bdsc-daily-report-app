@@ -122,8 +122,11 @@
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
       <div style="margin-bottom:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <label>Chọn ngày: <input type="date" id="rsm-date"></label>
+        <label>Báo cáo từ ngày: <input type="date" id="rsm-start"></label>
+        <label>đến ngày: <input type="date" id="rsm-end"></label>
         <button class="btn" onclick="loadRSMReview()" style="margin-top:0">Xem / Làm mới</button>
+        <button class="btn" type="button" onclick="resetRSMRange()" style="margin-top:0; background:#888">Hôm nay</button>
+        <span id="rsm-range-note" style="color:#555"></span>
         <label style="font-weight:normal; display:inline-flex; align-items:center; gap:4px;">
           <input type="checkbox" id="rsm-show-excluded" onchange="loadRSMReview()">
           Hiện cả những dòng không đưa vào báo cáo

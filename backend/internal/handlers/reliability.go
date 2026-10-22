@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,39 +47,77 @@ func canTouchReliability(r *http.Request, createdBy string) bool {
 // from then until the window closes picks it up, editable/deletable right
 // here like any manually typed row.
 //
-// An optional "?date=YYYY-MM-DD" switches to browsing a specific (usually
-// past) window instead — same date->window convention as ListCBM (the
-// chosen date is the window's closing cutoff), so a past window still
-// syncs/shows its own RSM PDF and can be edited/deleted (via
-// checkNotLocked) as long as that report date hasn't been Kiểm tra/Phê
-// duyệt'd yet.
+// An optional "?start=&end=YYYY-MM-DD" switches to browsing a range of
+// printed report dates instead (the date in the report PDF's own name, same
+// convention as ListSuCo's range): each report date in the range is first
+// carried forward/synced in order, oldest first — the same per-day loop
+// Báo cáo tuần runs — so a day nobody opened still shows its RSM issues,
+// then every row in the range comes back tagged with its ReportDate. The
+// range is clamped to the currently open report date (never creating rows
+// for a window that hasn't started) and to maxReliabilityRangeDays.
+// Past rows stay editable via checkNotLocked as long as their report date
+// hasn't been Kiểm tra/Phê duyệt'd yet.
 func (e *Env) ListReliability(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
-	var start, end, reportDate time.Time
-	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
-		d, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
-		if err != nil {
-			writeErr(w, 400, "ngay khong hop le, can dang YYYY-MM-DD")
+	now := time.Now()
+	current := window.ReportDateForEntry(now, rh, rm)
+	current = time.Date(current.Year(), current.Month(), current.Day(), 0, 0, 0, 0, time.Local)
+
+	var start, end time.Time
+	if startStr, endStr := r.URL.Query().Get("start"), r.URL.Query().Get("end"); startStr != "" || endStr != "" {
+		startD, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
+		endD, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
+		if err1 != nil || err2 != nil {
+			writeErr(w, 400, "start/end khong hop le, can dang YYYY-MM-DD")
 			return
 		}
-		runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local)
-		start, end = window.ReportWindow(runAt, rh, rm)
-		reportDate = runAt.AddDate(0, 0, -1)
+		if endD.Before(startD) {
+			writeErr(w, 400, "ngay ket thuc phai sau ngay bat dau")
+			return
+		}
+		if endD.After(current) {
+			endD = current
+		}
+		if endD.Sub(startD) > maxReliabilityRangeDays*24*time.Hour {
+			writeErr(w, 400, fmt.Sprintf("khoang ngay toi da %d ngay", maxReliabilityRangeDays))
+			return
+		}
+		for d := startD; !d.After(endD); d = d.AddDate(0, 0, 1) {
+			dStart, dEnd := window.ReportWindow(reportRunAt(d, rh, rm), rh, rm)
+			if d.Equal(startD) {
+				start = dStart
+			}
+			end = dEnd
+			e.syncReliabilityDay(d, dStart, dEnd, rh, rm)
+		}
+		if start.IsZero() { // whole range after the current report date
+			writeJSON(w, 200, []models.Reliability{})
+			return
+		}
 	} else {
-		now := time.Now()
 		start, end = window.EntryWindow(now, rh, rm)
-		reportDate = window.ReportDateForEntry(now, rh, rm)
+		e.syncReliabilityDay(current, start, end, rh, rm)
 	}
-	yStart, yEnd := window.ReportWindow(reportDate, rh, rm)
-	report.CarryForwardReliability(e.DB, yStart, yEnd, start, end)
-	report.SyncReliabilityFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
 
 	out, err := report.FetchReliability(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	for i := range out {
+		out[i].ReportDate = window.ReportDateForEntry(out[i].NgayBaoCao, rh, rm).Format("2006-01-02")
+	}
 	writeJSON(w, 200, out)
+}
+
+const maxReliabilityRangeDays = 62
+
+// syncReliabilityDay fills report date d's window [start, end]: carries
+// forward the previous report date's issues, then syncs d's RSM PDF.
+func (e *Env) syncReliabilityDay(d, start, end time.Time, rh, rm int) {
+	yStart, yEnd := window.ReportWindow(reportRunAt(d.AddDate(0, 0, -1), rh, rm), rh, rm)
+	report.CarryForwardReliability(e.DB, yStart, yEnd, start, end)
+	report.SyncReliabilityFromRSM(e.DB, e.effectiveRSMPdfFolder(), d, start, end)
 }
 
 func (e *Env) CreateReliability(w http.ResponseWriter, r *http.Request) {
