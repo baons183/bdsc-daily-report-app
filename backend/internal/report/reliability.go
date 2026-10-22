@@ -77,19 +77,21 @@ func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
 // SyncReliabilityFromRSM's dedup would then treat it as "new" and re-add
 // it fresh — silently undoing the exclusion. Carrying it forward with
 // Included=0 keeps the tag occupied, so that dedup correctly skips it
-// instead. Skips any ThietBi (tag name) already present in today's window
-// (e.g. a manual entry made earlier that morning) — same key
-// SyncReliabilityFromRSM uses.
+// instead. Skips any tag already present in today's window (e.g. a manual
+// entry made earlier that morning) — matched by TagKey, the same rule
+// SyncReliabilityFromRSM and Báo cáo tuần use, so "C-301" today blocks
+// yesterday's "C-301 RECYCLE GAS COMPRESSOR" from being carried in too.
 //
-// Deduped by ThietBi ALONE, not (ThietBi, VanDe) — BSR's own PDF export
+// Deduped by tag ALONE, not (tag, VanDe) — BSR's own PDF export
 // reworded the same ongoing issue's text slightly from one day's export to
 // the next often enough that keying on the exact Vấn đề string let the
 // same real issue re-insert itself as a "new" row day after day instead of
 // being recognized as a continuation, snowballing one tag into a dozen
 // near-duplicate rows over a couple of weeks. One tag now holds at most
 // one open row at a time; if yesterday somehow still had more than one
-// (leftover from before this change), only the first wins here and the
-// rest quietly stop being carried forward, converging within a day or two.
+// (leftover from before this change), only the first wins here — an
+// included row over an excluded one, then the newest — and the rest
+// quietly stop being carried forward, converging within a day or two.
 //
 // Callers should run this BEFORE SyncReliabilityFromRSM (see
 // ListReliability/GatherData/GetWeeklyReport), so if today's RSM PDF
@@ -102,7 +104,7 @@ func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
 // — this convenience should never block viewing or generating the report.
 func CarryForwardReliability(db *sql.DB, yStart, yEnd, start, end time.Time) {
 	yRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, Included, TrangThai
-FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included DESC, Id DESC`,
 		window.SQL(yStart), window.SQL(yEnd))
 	if err != nil {
 		return
@@ -133,32 +135,35 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
 	for tRows.Next() {
 		var tb string
 		if tRows.Scan(&tb) == nil {
-			existing[tb] = true
+			existing[TagKey(tb)] = true
 		}
 	}
 	tRows.Close()
 
 	for _, r := range yesterday {
-		if existing[r.thietBi] {
+		key := TagKey(r.thietBi)
+		if existing[key] {
 			continue
 		}
 		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, r.trangThai, start, end) {
-			existing[r.thietBi] = true
+			existing[key] = true
 		}
 	}
 }
 
 // SyncReliabilityFromRSM auto-imports reportDate's RSM PDF issues (section
 // IV.2, filtered to Ban BDSC's own departments — see internal/rsm) into
-// dbo.Reliability for the window [start, end], deduped by ThietBi (tag
-// name) ALONE rather than (ThietBi, VanDe) — see CarryForwardReliability's
-// comment on why: BSR's own export reworded the same ongoing issue's text
-// often enough between days that matching on the exact Vấn đề string let
-// the same real issue pile up as a "new" row repeatedly instead of being
-// recognized as a continuation. A tag already present in the window
-// (auto-imported, CreatedBy == "") gets its content fields (VanDe,
-// PhuongAn, DonVi, ThoiHan) refreshed in place to the PDF's latest wording
-// instead of a second row being inserted — Included/TrangThai are left
+// dbo.Reliability for the window [start, end], deduped by tag (TagKey,
+// the same rule CarryForwardReliability and Báo cáo tuần use) ALONE rather
+// than (ThietBi, VanDe) — see CarryForwardReliability's comment on why:
+// BSR's own export reworded the same ongoing issue's text often enough
+// between days that matching on the exact Vấn đề string let the same real
+// issue pile up as a "new" row repeatedly instead of being recognized as a
+// continuation. A tag already present in the window (auto-imported,
+// CreatedBy == "") gets its content fields (VanDe, PhuongAn, DonVi,
+// ThoiHan) refreshed in place to the PDF's latest wording, and its ThietBi
+// renamed to the shorter spelling (see ShorterTag), instead of a second
+// row being inserted — Included/TrangThai are left
 // untouched, since those reflect a person's own decision about this tag,
 // not BSR's text. A tag whose existing row was typed in by hand
 // (CreatedBy != "") is left alone entirely: that row belongs to whoever
@@ -184,10 +189,11 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 
 	type existingRow struct {
 		id        int64
+		thietBi   string
 		createdBy string
 	}
-	existing := map[string]existingRow{}
-	rows, err := db.Query(`SELECT Id, ThietBi, ISNULL(CreatedBy,'') FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+	existing := map[string]existingRow{} // keyed by TagKey
+	rows, err := db.Query(`SELECT Id, ThietBi, ISNULL(CreatedBy,'') FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included DESC, Id DESC`,
 		window.SQL(start), window.SQL(end))
 	if err != nil {
 		return
@@ -196,8 +202,8 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 		var id int64
 		var tb, createdBy string
 		if rows.Scan(&id, &tb, &createdBy) == nil {
-			if _, ok := existing[tb]; !ok {
-				existing[tb] = existingRow{id, createdBy}
+			if _, ok := existing[TagKey(tb)]; !ok {
+				existing[TagKey(tb)] = existingRow{id, tb, createdBy}
 			}
 		}
 	}
@@ -210,26 +216,28 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 		}
 		donVi := rsm.KeepDepartmentTokens(r.ActionBy, rsm.DepartmentKeywords)
 
-		if ex, ok := existing[r.TagName]; ok {
-			if ex.createdBy == "" {
-				updateReliabilityRowContent(db, ex.id, r.Issue, r.MitigationPlan, donVi, thoiHan)
+		key := TagKey(r.TagName)
+		if ex, ok := existing[key]; ok {
+			if ex.createdBy == "" && ex.id != 0 {
+				updateReliabilityRowContent(db, ex.id, ShorterTag(ex.thietBi, r.TagName), r.Issue, r.MitigationPlan, donVi, thoiHan)
 			}
 			continue
 		}
 		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, "in_progress", start, end) {
-			existing[r.TagName] = existingRow{createdBy: ""} // in case the PDF itself lists the same tag twice
+			existing[key] = existingRow{createdBy: ""} // in case the PDF itself lists the same tag twice
 		}
 	}
 }
 
 // updateReliabilityRowContent refreshes an auto-imported row's content
 // fields in place (VanDe/PhuongAn/DonVi/ThoiHan) when SyncReliabilityFromRSM
-// finds a same-tag entry already present for the window — leaves
+// finds a same-tag entry already present for the window, and renames its
+// ThietBi to the shorter of the two spellings (see ShorterTag) — leaves
 // Included/TrangThai/CreatedBy untouched, since those reflect a person's
 // own decision about this tag, not BSR's text.
-func updateReliabilityRowContent(db *sql.DB, id int64, vanDe, phuongAn, donVi string, thoiHan sql.NullTime) {
-	db.Exec(`UPDATE dbo.Reliability SET VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=? WHERE Id=?`,
-		vanDe, phuongAn, donVi, thoiHan, id)
+func updateReliabilityRowContent(db *sql.DB, id int64, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime) {
+	db.Exec(`UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=? WHERE Id=?`,
+		thietBi, vanDe, phuongAn, donVi, thoiHan, id)
 }
 
 // insertReliabilityRow appends one auto-imported row at the next TT in

@@ -102,31 +102,7 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		reliability = report.FilterReliabilityIncluded(reliability)
 	}
 
-	// Một vấn đề được CarryForwardReliability chép lại mỗi ngày cho tới khi
-	// được giải quyết, nên trong khoảng nhiều ngày của Báo cáo tuần, cùng 1
-	// tag name sẽ lặp lại 1 dòng cho mỗi ngày còn mở — chỉ giữ lại đúng bản
-	// ghi của ngày MỚI NHẤT cho mỗi TAG NAME (không phải từng cặp Tag+Vấn đề
-	// — 1 tag chỉ hiện 1 dòng duy nhất trong Báo cáo tuần, cùng cách làm với
-	// bảng Công việc ở trên).
-	reliabilityLatestByKey := map[string]models.Reliability{}
-	reliabilityOrder := []string{}
-	for _, r := range reliability {
-		key := r.ThietBi
-		if existing, ok := reliabilityLatestByKey[key]; !ok || r.NgayBaoCao.After(existing.NgayBaoCao) {
-			if !ok {
-				reliabilityOrder = append(reliabilityOrder, key)
-			}
-			reliabilityLatestByKey[key] = r
-		}
-	}
-	reliabilityLatest := make([]models.Reliability, 0, len(reliabilityOrder))
-	for _, key := range reliabilityOrder {
-		reliabilityLatest = append(reliabilityLatest, reliabilityLatestByKey[key])
-	}
-	for i := range reliabilityLatest {
-		reliabilityLatest[i].TT = i + 1
-	}
-	reliability = reliabilityLatest
+	reliability = dedupeWeeklyReliability(reliability)
 	congviecAll, err := report.FetchCongViec(ctx, e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -196,4 +172,40 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 		DeXuat:      report.CombineDeXuat(suco, giamsat, congviecLatest),
 		LuuY:        report.CombineLuuY(suco, giamsat, congviecLatest),
 	})
+}
+
+// Keep one latest row per tag (report.TagKey — the same rule the
+// Reliability tab's own RSM sync/carry-forward dedupes by), displaying the
+// shortest spelling of that tag seen across the range.
+func dedupeWeeklyReliability(rows []models.Reliability) []models.Reliability {
+	type groupedRow struct {
+		row models.Reliability
+		tag string
+	}
+
+	groups := make([]groupedRow, 0, len(rows))
+	index := map[string]int{}
+	for _, row := range rows {
+		key := report.TagKey(row.ThietBi)
+		i, ok := index[key]
+		if !ok {
+			index[key] = len(groups)
+			groups = append(groups, groupedRow{row: row, tag: strings.TrimSpace(row.ThietBi)})
+			continue
+		}
+
+		group := &groups[i]
+		group.tag = report.ShorterTag(group.tag, row.ThietBi)
+		if row.NgayBaoCao.After(group.row.NgayBaoCao) {
+			group.row = row
+		}
+	}
+
+	out := make([]models.Reliability, len(groups))
+	for i := range groups {
+		out[i] = groups[i].row
+		out[i].ThietBi = groups[i].tag
+		out[i].TT = i + 1
+	}
+	return out
 }
