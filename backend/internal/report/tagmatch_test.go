@@ -1,6 +1,9 @@
 package report
 
-import "testing"
+import (
+	"database/sql"
+	"testing"
+)
 
 func TestSameTag(t *testing.T) {
 	cases := []struct {
@@ -30,5 +33,18 @@ func TestShorterTag(t *testing.T) {
 	}
 	if got := ShorterTag("TK-6001F", "RDL TK-6001F"); got != "TK-6001F" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestReliabilityKeys(t *testing.T) {
+	if got := reliabilityKeys("TK-6001F", sql.NullString{}); len(got) != 1 || got[0] != "tk-6001f" {
+		t.Errorf("no RsmTag: got %v", got)
+	}
+	if got := reliabilityKeys("TK-6001F", sql.NullString{String: "RDL TK-6001F", Valid: true}); len(got) != 1 {
+		t.Errorf("same-tag RsmTag should not add a key: got %v", got)
+	}
+	got := reliabilityKeys("Bồn TK-6001", sql.NullString{String: "RDL TK-6001F", Valid: true})
+	if len(got) != 2 || got[0] != "tk-6001" || got[1] != "tk-6001f" {
+		t.Errorf("renamed row should answer to both tags: got %v", got)
 	}
 }

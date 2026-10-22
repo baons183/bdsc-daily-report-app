@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -134,7 +135,8 @@ func (e *Env) DeleteSuCo(w http.ResponseWriter, r *http.Request) {
 	}
 	var ngayBaoCao time.Time
 	var createdBy string
-	if err := e.DB.QueryRowContext(r.Context(), `SELECT NgayBaoCao, ISNULL(CreatedBy,'') FROM dbo.SuCo WHERE Id = ?`, id).Scan(&ngayBaoCao, &createdBy); err != nil {
+	var rsmKey sql.NullString
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT NgayBaoCao, ISNULL(CreatedBy,''), RsmKey FROM dbo.SuCo WHERE Id = ?`, id).Scan(&ngayBaoCao, &createdBy, &rsmKey); err != nil {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
@@ -144,7 +146,30 @@ func (e *Env) DeleteSuCo(w http.ResponseWriter, r *http.Request) {
 	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
 		return
 	}
-	if _, err := e.DB.ExecContext(r.Context(), `DELETE FROM dbo.SuCo WHERE Id = ?`, id); err != nil {
+	tx, err := e.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	defer tx.Rollback()
+	// An RSM-imported row is remembered as dismissed, otherwise the next
+	// SyncSuCoFromRSM would import the same PDF entry right back.
+	if rsmKey.Valid {
+		dismissedBy := ""
+		if user := currentUser(r); user != nil {
+			dismissedBy = user.EmployeeCode
+		}
+		if _, err := tx.ExecContext(r.Context(), `INSERT INTO dbo.SuCoRsmDismissed (RsmKey, NgayBaoCao, DismissedBy) VALUES (?, ?, ?)`,
+			rsmKey.String, window.SQL(ngayBaoCao), dismissedBy); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM dbo.SuCo WHERE Id = ?`, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
@@ -193,6 +218,43 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 UPDATE dbo.SuCo SET ThietBi=?, DM=?, LoaiSuCo=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?, TrangThai=?
 WHERE Id=?`,
 		in.ThietBi, in.DM, in.LoaiSuCo, in.TinhTrang, in.ThoiGianDungPX, in.ThoiGianDungTB, in.PhuongAn, in.DonVi, in.ThoiHan, in.DeXuat, in.LuuY, normalizeTrangThai(in.TrangThai), id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+type setSuCoTrangThaiReq struct {
+	TrangThai string `json:"trangThai"`
+}
+
+// SetSuCoTrangThai changes "trạng thái thực hiện" for one row inline from
+// the Sự cố table's own dropdown, without going through the full Sửa form
+// — same permission and lock checks as UpdateSuCo.
+func (e *Env) SetSuCoTrangThai(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, 400, "id khong hop le")
+		return
+	}
+	var createdBy string
+	var ngayBaoCao time.Time
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.SuCo WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
+		writeErr(w, 404, "khong tim thay dong nay")
+		return
+	}
+	if !checkEditOwnership(w, r, createdBy) {
+		return
+	}
+	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
+		return
+	}
+	var in setSuCoTrangThaiReq
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.SuCo SET TrangThai = ? WHERE Id = ?`, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

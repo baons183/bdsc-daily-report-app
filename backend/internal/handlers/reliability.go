@@ -283,7 +283,7 @@ func (e *Env) UpdateReliability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := e.DB.ExecContext(r.Context(), `
-UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?, TrangThai=?
+UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?, TrangThai=?, Edited=1
 WHERE Id=?`,
 		in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())

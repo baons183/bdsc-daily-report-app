@@ -313,6 +313,42 @@ IF COL_LENGTH('dbo.CongViec', 'TrangThai') IS NULL
 ALTER TABLE dbo.CongViec ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 IF COL_LENGTH('dbo.Reliability', 'TrangThai') IS NULL
 ALTER TABLE dbo.Reliability ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
+
+-- RsmKey remembers which RSM PDF entry (TagName|Issue, as first imported)
+-- an auto-imported Sự cố row came from, so report.SyncSuCoFromRSM still
+-- recognizes the row after a user edits its Thiết bị/Tình trạng instead of
+-- re-importing the original wording as a "new" row. Backfilled for rows
+-- imported before this column existed from their current text (dynamic
+-- SQL, since the column doesn't exist yet when this batch is compiled).
+IF COL_LENGTH('dbo.SuCo', 'RsmKey') IS NULL
+BEGIN
+  ALTER TABLE dbo.SuCo ADD RsmKey NVARCHAR(1000) NULL;
+  EXEC('UPDATE dbo.SuCo SET RsmKey = ThietBi + ''|'' + ISNULL(TinhTrang, '''') WHERE ISNULL(CreatedBy, '''') = ''''');
+END;
+
+-- Reliability counterpart: Edited marks a row someone saved through the
+-- Sửa form, so SyncReliabilityFromRSM stops refreshing it to the PDF's
+-- latest wording; RsmTag remembers the tag it was first imported under, so
+-- renaming its Thiết bị doesn't make the same PDF entry import again.
+IF COL_LENGTH('dbo.Reliability', 'Edited') IS NULL
+ALTER TABLE dbo.Reliability ADD Edited BIT NOT NULL DEFAULT 0;
+IF COL_LENGTH('dbo.Reliability', 'RsmTag') IS NULL
+BEGIN
+  ALTER TABLE dbo.Reliability ADD RsmTag NVARCHAR(400) NULL;
+  EXEC('UPDATE dbo.Reliability SET RsmTag = ThietBi WHERE ISNULL(CreatedBy, '''') = ''''');
+END;
+
+-- One row per auto-imported Sự cố a user deleted: SyncSuCoFromRSM skips any
+-- RsmKey listed here for the same window, so deleting a row RSM keeps
+-- listing actually sticks.
+IF OBJECT_ID('dbo.SuCoRsmDismissed', 'U') IS NULL
+CREATE TABLE dbo.SuCoRsmDismissed (
+  Id INT IDENTITY(1,1) PRIMARY KEY,
+  RsmKey NVARCHAR(1000) NOT NULL,
+  NgayBaoCao DATETIME NOT NULL,
+  DismissedBy NVARCHAR(50) NULL,
+  DismissedAt DATETIME NOT NULL DEFAULT GETDATE()
+);
 `
 
 func Migrate(conn *sql.DB) error {

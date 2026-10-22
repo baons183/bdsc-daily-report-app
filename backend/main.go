@@ -50,6 +50,7 @@ func main() {
 	mux.Handle("POST /api/suco", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.CreateSuCo))))
 	mux.Handle("PUT /api/suco/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("SuCo", env.UpdateSuCo))))
 	mux.Handle("DELETE /api/suco/{id}", authMw(http.HandlerFunc(auth.RequireRole("SuCo", env.DeleteSuCo))))
+	mux.Handle("POST /api/suco/{id}/trangthai", authMw(http.HandlerFunc(auth.RequireEditRole("SuCo", env.SetSuCoTrangThai))))
 
 	mux.Handle("GET /api/giamsat", authMw(http.HandlerFunc(env.ListGiamSat)))
 	mux.Handle("POST /api/giamsat", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.CreateGiamSat))))

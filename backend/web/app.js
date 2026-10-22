@@ -283,9 +283,30 @@ async function loadSuCo() {
       <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${r.thoiGianDungPX ?? ""}</td><td>${r.thoiGianDungTB ?? ""}</td>
       <td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
-      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
+      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${sucoTrangThaiSelect(r)}</td>
       <td>${actionButtons("SuCo", r)}</td>
     </tr>`).join("");
+}
+// Đổi trạng thái ngay tại bảng, không cần bấm Sửa — cùng quyền với nút Sửa
+// (canEdit, khớp checkEditOwnership phía server).
+function sucoTrangThaiSelect(r) {
+  const disabled = canEdit(r.createdBy) ? "" : "disabled";
+  const cur = r.trangThai || "in_progress";
+  const opt = v => `<option value="${v}" ${cur === v ? "selected" : ""}>${trangThaiLabel(v)}</option>`;
+  return `<select ${disabled} onchange="setSuCoTrangThai(${r.id}, this.value)">${["not_started", "in_progress", "done"].map(opt).join("")}</select>`;
+}
+async function setSuCoTrangThai(id, trangThai) {
+  try {
+    await api(`/api/suco/${id}/trangthai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trangThai }),
+    });
+    if (ROWS_CACHE.suco[id]) ROWS_CACHE.suco[id].trangThai = trangThai;
+  } catch (e) {
+    alert("Lỗi: " + e.message);
+    loadSuCo();
+  }
 }
 function resetSuCoRange() {
   document.getElementById("suco-start").value = "";

@@ -11,10 +11,12 @@ import (
 // SyncSuCoFromRSM auto-imports reportDate's RSM PDF section IV.3 (NEW
 // TE/IC IN SHIFT — new Technical Event/Incident logged during the shift),
 // filtered to Ban BDSC's own departments, into dbo.SuCo for the window
-// [start, end] — same idempotent "skip if (ThietBi, TinhTrang) already
-// present" dedup rule as SyncReliabilityFromRSM, so it can be called
-// repeatedly (every report generation, every time a user opens the Sự cố
-// tab) without ever creating duplicates.
+// [start, end], skipping any PDF entry (TagName|Issue) already imported
+// into that window — matched by the row's RsmKey, which stays fixed when a
+// user edits the row — or listed in dbo.SuCoRsmDismissed (a user deleted
+// it), so it can be called repeatedly (every report generation, every time
+// a user opens the Sự cố tab) without ever creating duplicates or undoing
+// a user's edit/delete.
 //
 // IV.3 is very often empty (no new TE/IC that shift) — this is the normal
 // case and simply results in nothing being imported, not an error.
@@ -42,15 +44,18 @@ func SyncSuCoFromRSM(db *sql.DB, folder string, reportDate, start, end time.Time
 	}
 
 	existing := map[string]bool{}
-	rows, err := db.Query(`SELECT ThietBi, ISNULL(TinhTrang,'') FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
-		window.SQL(start), window.SQL(end))
+	rows, err := db.Query(`
+SELECT ISNULL(RsmKey, ThietBi + '|' + ISNULL(TinhTrang,'')) FROM dbo.SuCo WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?
+UNION ALL
+SELECT RsmKey FROM dbo.SuCoRsmDismissed WHERE NgayBaoCao >= ? AND NgayBaoCao <= ?`,
+		window.SQL(start), window.SQL(end), window.SQL(start), window.SQL(end))
 	if err != nil {
 		return
 	}
 	for rows.Next() {
-		var tb, tt string
-		if rows.Scan(&tb, &tt) == nil {
-			existing[tb+"|"+tt] = true
+		var key string
+		if rows.Scan(&key) == nil {
+			existing[key] = true
 		}
 	}
 	rows.Close()
@@ -85,8 +90,8 @@ func insertSuCoRow(db *sql.DB, thietBi, tinhTrang, phuongAn, donVi string, thoiH
 		window.SQL(start), window.SQL(end)).Scan(&count); err != nil {
 		return false
 	}
-	if _, err := tx.Exec(`INSERT INTO dbo.SuCo (TT, ThietBi, LoaiSuCo, TinhTrang, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy) VALUES (?, ?, 'Technical Event', ?, ?, ?, ?, ?, '')`,
-		count+1, thietBi, tinhTrang, phuongAn, donVi, thoiHan, start); err != nil {
+	if _, err := tx.Exec(`INSERT INTO dbo.SuCo (TT, ThietBi, LoaiSuCo, TinhTrang, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, RsmKey) VALUES (?, ?, 'Technical Event', ?, ?, ?, ?, ?, '', ?)`,
+		count+1, thietBi, tinhTrang, phuongAn, donVi, thoiHan, start, thietBi+"|"+tinhTrang); err != nil {
 		return false
 	}
 	return tx.Commit() == nil
