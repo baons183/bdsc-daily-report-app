@@ -16,6 +16,13 @@ const TRANG_THAI = {
   done: "Hoàn thành",
 };
 function trangThaiLabel(v) { return TRANG_THAI[v] || TRANG_THAI.in_progress; }
+// Bộ lọc trạng thái (chọn nhiều) ở các trang nhập liệu — mỗi trang 1 nhóm
+// checkbox .status-cb[data-group=...]. Chỉ lọc lúc vẽ bảng; ROWS_CACHE vẫn
+// giữ đủ dòng để nút Sửa dùng. Bỏ tick hết thì không còn dòng nào khớp.
+function filterByStatusGroup(group, rows) {
+  const want = new Set([...document.querySelectorAll(`.status-cb[data-group="${group}"]:checked`)].map(cb => cb.value));
+  return rows.filter(r => want.has(r.trangThai || "in_progress"));
+}
 
 
 let TOKEN = localStorage.getItem("bdsc_token") || "";
@@ -279,7 +286,7 @@ async function loadSuCo() {
   const t = document.getElementById("table-suco");
   t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
       <th>Phương án xử lý</th><th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
-    rows.map(r => `<tr>
+    filterByStatusGroup("suco", rows).map(r => `<tr>
       <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${r.thoiGianDungPX ?? ""}</td><td>${r.thoiGianDungTB ?? ""}</td>
       <td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
@@ -353,7 +360,7 @@ async function loadGiamSat() {
   const t = document.getElementById("table-giamsat");
   t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
       <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
-    rows.map(r => `<tr>
+    filterByStatusGroup("giamsat", rows).map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${esc(r.ruiRo)}</td><td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
       <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
@@ -396,7 +403,7 @@ async function loadCongViecToday() {
   const t = document.getElementById("table-congviec");
   t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
       <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th>Ảnh</th><th></th></tr>` +
-    rows.map(r => `<tr>
+    filterByStatusGroup("congviec", rows).map(r => `<tr>
       <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? ""}</td>
       <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td><td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
       <td>${(r.attachments||[]).map(a => `<img class="thumb" src="/uploads/${a.filePath}">`).join("")}</td>
@@ -551,7 +558,7 @@ function renderRSMReview() {
   // vẫn còn trong ROWS_CACHE/API, chỉ ẩn khỏi bảng trừ khi người dùng tự
   // bật lại ô "Hiện cả dòng không đưa vào báo cáo" để tìm và tick lại.
   const showExcluded = document.getElementById("rsm-show-excluded").checked;
-  const visible = showExcluded ? [...rows] : rows.filter(r => r.included);
+  const visible = filterByStatusGroup("rsm", showExcluded ? rows : rows.filter(r => r.included));
   // Theo ngày: ngày báo cáo mới nhất trước (trong cùng ngày giữ thứ tự
   // server trả về). Theo tag: Tagname A→Z (so số tự nhiên, TK-2 trước
   // TK-10), cùng tag thì ngày mới nhất trước.
@@ -778,7 +785,8 @@ function renderWeeklyReport(d) {
       </table>
 
       <div class="rv-heading">CHI TIẾT SỰ CỐ/VẤN ĐỀ KỸ THUẬT ẢNH HƯỞNG VẬN HÀNH</div>
-      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "PX (h)", "TB (h)", "Phương án", "Đơn vị", "Thời hạn", "Trạng thái"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")}
+      ${rvTable(["TT", "Thiết bị", "Phòng", "Loại sự cố", "Tình trạng", "Downtime<br>PX (h)", "Downtime<br>TB (h)", "Phương án", "Đơn vị", "Thời hạn", "Trạng thái"], sucoRows, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.",
+        { 5: "width:62px; text-align:center", 6: "width:62px; text-align:center" })}
       
       <div class="rv-heading">TỔNG SỐ LƯỢT BẤT THƯỜNG PHÁT HIỆN QUA CÔNG TÁC GIÁM SÁT THIẾT BỊ</div>
       <table><tr><th></th><th>Số lượt</th><th>Số thiết bị</th></tr>
@@ -816,10 +824,13 @@ function renderWeeklyReport(d) {
   `;
 }
 
-function rvTable(headers, rows, emptyMsg) {
+// colStyles (tuỳ chọn): { chỉ số cột: "css" } áp cho cả th và td của cột đó,
+// vd để thu hẹp cột chỉ chứa số ngắn.
+function rvTable(headers, rows, emptyMsg, colStyles = {}) {
   if (!rows || rows.length === 0) return `<div class="rv-nodata">${emptyMsg || "(Không có dữ liệu)"}</div>`;
-  return `<table><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>` +
-    rows.map(r => `<tr>${r.map(c => `<td>${String(c ?? "").replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("") +
+  const st = i => colStyles[i] ? ` style="${colStyles[i]}"` : "";
+  return `<table><tr>${headers.map((h, i) => `<th${st(i)}>${h}</th>`).join("")}</tr>` +
+    rows.map(r => `<tr>${r.map((c, i) => `<td${st(i)}>${String(c ?? "").replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("") +
     `</table>`;
 }
 

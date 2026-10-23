@@ -103,6 +103,7 @@
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
 
+      <div style="margin:10px 0 8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><span>Trạng thái:<label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="giamsat" value="not_started" checked onchange="loadGiamSat()">Chưa thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="giamsat" value="in_progress" checked onchange="loadGiamSat()">Đang thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="giamsat" value="done" checked onchange="loadGiamSat()">Hoàn thành</label></span></div>
       <div style="overflow-x:auto"><table id="table-giamsat"></table></div>
     </section>
 
@@ -130,6 +131,7 @@
           <option value="date">Theo ngày báo cáo</option>
           <option value="tag">Theo Tagname</option>
         </select></label>
+        <span>Trạng thái:<label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="rsm" value="not_started" checked onchange="renderRSMReview()">Chưa thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="rsm" value="in_progress" checked onchange="renderRSMReview()">Đang thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="rsm" value="done" checked onchange="renderRSMReview()">Hoàn thành</label></span>
         <span id="rsm-range-note" style="color:#555"></span>
         <label style="font-weight:normal; display:inline-flex; align-items:center; gap:4px;">
           <input type="checkbox" id="rsm-show-excluded" onchange="renderRSMReview()">
@@ -162,6 +164,7 @@
         <label class="full">Hình ảnh<input name="photos" type="file" multiple accept="image/*"></label>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
+      <div style="margin:10px 0 8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><span>Trạng thái:<label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="congviec" value="not_started" checked onchange="loadCongViecToday()">Chưa thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="congviec" value="in_progress" checked onchange="loadCongViecToday()">Đang thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="congviec" value="done" checked onchange="loadCongViecToday()">Hoàn thành</label></span></div>
       <div style="overflow-x:auto"><table id="table-congviec"></table></div>
     </section>
 
@@ -255,6 +258,7 @@
           <label>đến ngày: <input type="date" id="suco-end"></label>
           <button class="btn" type="button" onclick="loadSuCo()" style="margin-top:0">Xem</button>
           <button class="btn" type="button" onclick="resetSuCoRange()" style="margin-top:0; background:#888">Hôm nay</button>
+          <span>Trạng thái:<label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="suco" value="not_started" checked onchange="loadSuCo()">Chưa thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="suco" value="in_progress" checked onchange="loadSuCo()">Đang thực hiện</label><label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="suco" value="done" checked onchange="loadSuCo()">Hoàn thành</label></span>
           <span id="suco-range-note" style="color:#555"></span>
         </div>
         <div style="overflow-x:auto"><table id="table-suco"></table></div>
