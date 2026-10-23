@@ -51,7 +51,6 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 	start, end := window.ReportWindow(runAt, rh, rm)
 	reportDateT := runAt.AddDate(0, 0, -1)
 
-	SyncSuCoFromRSM(db, rsmPdfFolder, reportDateT, start, end)
 	suco, err := FetchSuCo(ctx, db, start, end)
 	if err != nil {
 		return BuildInput{}, err
@@ -88,7 +87,7 @@ func GatherData(db *sql.DB, uploadsDir, cbmExcelPath, rsmPdfFolder string, runAt
 	if err != nil {
 		reliability = nil
 	} else {
-		reliability = FilterReliabilityIncluded(reliability)
+		reliability = FilterReliabilityForDailyReport(reliability)
 	}
 
 	return BuildInput{

@@ -69,18 +69,8 @@ func ParsePDF(path string) ([]Row, error) {
 	return parseSection(path, "IV.2", "IV.3")
 }
 
-// ParseNewTEIC extracts section IV.3's table (NEW TE/IC IN SHIFT — new
-// Technical Event/Incident logged during the shift) as rows, using the
-// exact same column layout as IV.2. This section is very often empty in
-// practice (no new TE/IC that shift) — an empty slice is the normal case,
-// not an error.
-func ParseNewTEIC(path string) ([]Row, error) {
-	return parseSection(path, "IV.3", "V. Recommendation")
-}
-
 // parseSection extracts the table between startMarker and endMarker
-// (matched as literal text prefixes) — shared by ParsePDF (IV.2) and
-// ParseNewTEIC (IV.3), which use the exact same column layout.
+// (matched as literal text prefixes) — used by ParsePDF (IV.2).
 func parseSection(path, startMarker, endMarker string) ([]Row, error) {
 	f, r, err := pdf.Open(path)
 	if err != nil {

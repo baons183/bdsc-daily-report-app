@@ -59,13 +59,13 @@ func (e *Env) GetWeeklyReport(w http.ResponseWriter, r *http.Request) {
 
 	// Sync mỗi ngày trong khoảng đã chọn với file RSM PDF của ngày đó (nếu
 	// có) trước khi đọc, để Báo cáo tuần không bị thiếu dữ liệu của những
-	// ngày chưa ai mở tab Sự cố/Reliability hoặc sinh báo cáo ngày.
+	// ngày chưa ai mở tab Reliability hoặc sinh báo cáo ngày (chỉ Reliability
+	// lấy từ RSM — Sự cố chỉ nhập tay).
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	folder := e.effectiveRSMPdfFolder()
 	for d := startD; !d.After(endD); d = d.AddDate(0, 0, 1) {
 		runAt := time.Date(d.Year(), d.Month(), d.Day(), rh, rm, 0, 0, time.Local).AddDate(0, 0, 1)
 		dayStart, dayEnd := window.ReportWindow(runAt, rh, rm)
-		report.SyncSuCoFromRSM(e.DB, folder, d, dayStart, dayEnd)
 		yStart, yEnd := window.ReportWindow(d, rh, rm)
 		report.CarryForwardReliability(e.DB, yStart, yEnd, dayStart, dayEnd)
 		report.SyncReliabilityFromRSM(e.DB, folder, d, dayStart, dayEnd)

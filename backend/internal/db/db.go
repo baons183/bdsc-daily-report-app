@@ -314,8 +314,10 @@ ALTER TABLE dbo.CongViec ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progres
 IF COL_LENGTH('dbo.Reliability', 'TrangThai') IS NULL
 ALTER TABLE dbo.Reliability ADD TrangThai NVARCHAR(20) NOT NULL DEFAULT 'in_progress';
 
--- RsmKey remembers which RSM PDF entry (TagName|Issue, as first imported)
--- an auto-imported Sự cố row came from, so report.SyncSuCoFromRSM still
+-- (No longer written: Sự cố stopped auto-importing from the RSM PDF — kept
+-- so older databases migrate the same way.) RsmKey remembered which RSM
+-- PDF entry (TagName|Issue, as first imported) an auto-imported Sự cố row
+-- came from, so the since-removed report.SyncSuCoFromRSM still
 -- recognizes the row after a user edits its Thiết bị/Tình trạng instead of
 -- re-importing the original wording as a "new" row. Backfilled for rows
 -- imported before this column existed from their current text (dynamic
@@ -336,6 +338,20 @@ IF COL_LENGTH('dbo.Reliability', 'RsmTag') IS NULL
 BEGIN
   ALTER TABLE dbo.Reliability ADD RsmTag NVARCHAR(400) NULL;
   EXEC('UPDATE dbo.Reliability SET RsmTag = ThietBi WHERE ISNULL(CreatedBy, '''') = ''''');
+END;
+
+-- RsmClosed marks a row report.closeReliabilityGoneFromRSM set to Hoàn
+-- thành because BSR's RSM PDF stopped listing it (so it can be reopened if
+-- the PDF lists it again, unlike a Hoàn thành a person chose). Added
+-- together with a one-time fix for rows carried forward from a manually
+-- typed issue before Edited existed: those were copied with CreatedBy ''
+-- and so got an RsmTag from the backfill above, making them look
+-- RSM-sourced — any row sharing its ThietBi with a manually typed row is
+-- treated as the user's own instead.
+IF COL_LENGTH('dbo.Reliability', 'RsmClosed') IS NULL
+BEGIN
+  ALTER TABLE dbo.Reliability ADD RsmClosed BIT NOT NULL DEFAULT 0;
+  EXEC('UPDATE dbo.Reliability SET Edited = 1, RsmTag = NULL WHERE ISNULL(CreatedBy, '''') = '''' AND ThietBi IN (SELECT ThietBi FROM dbo.Reliability WHERE ISNULL(CreatedBy, '''') <> '''')');
 END;
 
 -- One row per auto-imported Sự cố a user deleted: SyncSuCoFromRSM skips any

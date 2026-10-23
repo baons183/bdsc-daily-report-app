@@ -1,6 +1,7 @@
 package report
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -22,6 +23,7 @@ import (
 // deduped and sorted. A string with no tag-like token at all falls back to
 // its whole lowercased text, so free-text entries only match themselves.
 func TagKey(s string) string {
+	s = brokenHyphen.ReplaceAllString(s, "$1-$2")
 	fields := strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
 		return unicode.IsSpace(r) || strings.ContainsRune("/,;&+", r)
 	})
@@ -43,6 +45,12 @@ func TagKey(s string) string {
 	sort.Strings(tags)
 	return strings.Join(tags, " ")
 }
+
+// brokenHyphen matches a tag split by a stray space after its hyphen, as in
+// some RSM exports' "053- DF-105". A spaced " - " (separator, not part of a
+// tag, as in "040-AIT-151 - online analyser") has no letter/digit right
+// before the hyphen and is left alone.
+var brokenHyphen = regexp.MustCompile(`([\p{L}\p{N}])-\s+([\p{L}\p{N}])`)
 
 // SameTag reports whether a and b name the same equipment (see TagKey).
 func SameTag(a, b string) bool {

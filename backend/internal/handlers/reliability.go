@@ -285,7 +285,7 @@ func (e *Env) SetReliabilityTrangThai(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trangThai := normalizeTrangThai(in.TrangThai)
-	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.Reliability SET TrangThai = ? WHERE Id = ?`, trangThai, id); err != nil {
+	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.Reliability SET TrangThai = ?, RsmClosed = 0 WHERE Id = ?`, trangThai, id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
@@ -322,7 +322,7 @@ func (e *Env) UpdateReliability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := e.DB.ExecContext(r.Context(), `
-UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?, TrangThai=?, Edited=1
+UPDATE dbo.Reliability SET ThietBi=?, VanDe=?, PhuongAn=?, DonVi=?, ThoiHan=?, TrangThai=?, Edited=1, RsmClosed=0
 WHERE Id=?`,
 		in.ThietBi, in.VanDe, in.PhuongAn, in.DonVi, in.ThoiHan, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())

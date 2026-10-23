@@ -43,6 +43,23 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Id DESC`
 	return out, nil
 }
 
+// FilterReliabilityForDailyReport is what the daily report (PDF/email/Báo
+// cáo ngày tab) prints: FilterReliabilityIncluded minus every row already
+// marked Hoàn thành — a finished issue leaves the daily report right away,
+// but its row stays (hidden) in the window and keeps being carried forward,
+// so the same RSM entry isn't re-imported as new the next day. Báo cáo
+// tuần keeps using FilterReliabilityIncluded, since it shows and filters
+// by trạng thái itself.
+func FilterReliabilityForDailyReport(rows []models.Reliability) []models.Reliability {
+	open := make([]models.Reliability, 0, len(rows))
+	for _, r := range rows {
+		if r.TrangThai != "done" {
+			open = append(open, r)
+		}
+	}
+	return FilterReliabilityIncluded(open)
+}
+
 // FilterReliabilityIncluded drops any row a user has unticked "đưa vào báo
 // cáo" for, then renumbers TT 1..N over what's left — used only when
 // actually building the report (PDF/email/Thống kê/Báo cáo tuần), never
@@ -103,8 +120,14 @@ func FilterReliabilityIncluded(rows []models.Reliability) []models.Reliability {
 // Best-effort: any error here is swallowed, same as SyncReliabilityFromRSM
 // — this convenience should never block viewing or generating the report.
 func CarryForwardReliability(db *sql.DB, yStart, yEnd, start, end time.Time) {
+	// A window's start falls on its own report date (cutoff+1min of D), so
+	// this is the report the carried rows would land in — never touch one
+	// already Kiểm tra/Phê duyệt'd (e.g. a past range being browsed).
+	if reportLocked(db, start) {
+		return
+	}
 	yRows, err := db.Query(`SELECT ThietBi, ISNULL(VanDe,''), ISNULL(PhuongAn,''), ISNULL(DonVi,''), ThoiHan, Included, TrangThai,
-       RsmTag, CAST(CASE WHEN Edited = 1 OR ISNULL(CreatedBy,'') <> '' THEN 1 ELSE 0 END AS BIT)
+       RsmTag, CAST(CASE WHEN Edited = 1 OR ISNULL(CreatedBy,'') <> '' THEN 1 ELSE 0 END AS BIT), RsmClosed
 FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included DESC, Id DESC`,
 		window.SQL(yStart), window.SQL(yEnd))
 	if err != nil {
@@ -113,13 +136,13 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included
 	type row struct {
 		thietBi, vanDe, phuongAn, donVi, trangThai string
 		thoiHan                                    sql.NullTime
-		included, edited                           bool
+		included, edited, rsmClosed                bool
 		rsmTag                                     sql.NullString
 	}
 	var yesterday []row
 	for yRows.Next() {
 		var r row
-		if yRows.Scan(&r.thietBi, &r.vanDe, &r.phuongAn, &r.donVi, &r.thoiHan, &r.included, &r.trangThai, &r.rsmTag, &r.edited) == nil {
+		if yRows.Scan(&r.thietBi, &r.vanDe, &r.phuongAn, &r.donVi, &r.thoiHan, &r.included, &r.trangThai, &r.rsmTag, &r.edited, &r.rsmClosed) == nil {
 			yesterday = append(yesterday, r)
 		}
 	}
@@ -150,7 +173,7 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included
 		if existing[keys[0]] || (len(keys) > 1 && existing[keys[1]]) {
 			continue
 		}
-		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, r.trangThai, r.rsmTag, r.edited, start, end) {
+		if insertReliabilityRow(db, r.thietBi, r.vanDe, r.phuongAn, r.donVi, r.thoiHan, r.included, r.trangThai, r.rsmTag, r.edited, r.rsmClosed, start, end) {
 			for _, k := range keys {
 				existing[k] = true
 			}
@@ -183,15 +206,21 @@ FROM dbo.Reliability WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? ORDER BY Included
 // Best-effort: any error here is swallowed, since this convenience sync
 // should never block viewing or generating the rest of the report.
 func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end time.Time) {
+	if reportLocked(db, reportDate) {
+		return
+	}
 	path, found := rsm.FindPDF(folder, reportDate)
 	if !found {
 		return
 	}
 	pdfRows, err := rsm.ParsePDF(path)
-	if err != nil {
+	if err != nil || len(pdfRows) == 0 {
+		// An empty section is far more likely a parse miss than BSR
+		// closing every issue at once — don't auto-close anything on it.
 		return
 	}
 	filtered := rsm.FilterByDepartment(pdfRows, rsm.DepartmentKeywords)
+	defer closeReliabilityGoneFromRSM(db, filtered, reportDate, start, end)
 	if len(filtered) == 0 {
 		return
 	}
@@ -237,10 +266,71 @@ func SyncReliabilityFromRSM(db *sql.DB, folder string, reportDate, start, end ti
 			}
 			continue
 		}
-		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, "in_progress", sql.NullString{String: r.TagName, Valid: true}, false, start, end) {
+		if insertReliabilityRow(db, r.TagName, r.Issue, r.MitigationPlan, donVi, thoiHan, true, "in_progress", sql.NullString{String: r.TagName, Valid: true}, false, false, start, end) {
 			existing[key] = existingRow{createdBy: ""} // in case the PDF itself lists the same tag twice
 		}
 	}
+}
+
+// closeReliabilityGoneFromRSM keeps window [start, end]'s RSM-sourced rows
+// in step with reportDate's PDF, which lists every issue BSR still
+// considers open: a row whose tag is no longer listed was closed by BSR,
+// so it's marked Hoàn thành (and RsmClosed, to tell this apart from a
+// person's own choice) — which drops it from the daily report while the
+// row itself stays and keeps being carried forward. A row this closed that
+// the PDF lists again is reopened (Đang thực hiện). Only touches rows
+// nobody owns or has edited (empty CreatedBy, Edited = 0, RsmTag set),
+// (SyncReliabilityFromRSM already skips report dates Kiểm tra/Phê duyệt'd).
+func closeReliabilityGoneFromRSM(db *sql.DB, pdfRows []rsm.Row, reportDate, start, end time.Time) {
+	listed := map[string]bool{}
+	for _, r := range pdfRows {
+		listed[TagKey(r.TagName)] = true
+	}
+	rows, err := db.Query(`SELECT Id, ThietBi, RsmTag, TrangThai, RsmClosed FROM dbo.Reliability
+WHERE NgayBaoCao >= ? AND NgayBaoCao <= ? AND ISNULL(CreatedBy,'') = '' AND Edited = 0 AND RsmTag IS NOT NULL`,
+		window.SQL(start), window.SQL(end))
+	if err != nil {
+		return
+	}
+	type row struct {
+		id        int64
+		keys      []string
+		trangThai string
+		rsmClosed bool
+	}
+	var all []row
+	for rows.Next() {
+		var r row
+		var tb string
+		var rsmTag sql.NullString
+		if rows.Scan(&r.id, &tb, &rsmTag, &r.trangThai, &r.rsmClosed) == nil {
+			r.keys = reliabilityKeys(tb, rsmTag)
+			all = append(all, r)
+		}
+	}
+	rows.Close()
+
+	for _, r := range all {
+		stillListed := false
+		for _, k := range r.keys {
+			stillListed = stillListed || listed[k]
+		}
+		switch {
+		case !stillListed && r.trangThai != "done":
+			db.Exec(`UPDATE dbo.Reliability SET TrangThai = 'done', RsmClosed = 1 WHERE Id = ?`, r.id)
+		case stillListed && r.rsmClosed:
+			db.Exec(`UPDATE dbo.Reliability SET TrangThai = 'in_progress', RsmClosed = 0 WHERE Id = ?`, r.id)
+		}
+	}
+}
+
+// reportLocked reports whether reportDate's report is already Kiểm tra'd or
+// Phê duyệt'd — same rule as handlers.checkNotLocked, for background syncs
+// that have no request/user to check against.
+func reportLocked(db *sql.DB, reportDate time.Time) bool {
+	var status string
+	err := db.QueryRow(`SELECT Status FROM dbo.ReportApprovals WHERE ReportDate = ?`, reportDate.Format("2006-01-02")).Scan(&status)
+	return err == nil && (status == "reviewed" || status == "approved")
 }
 
 // reliabilityKeys returns the TagKeys a row answers to: its current
@@ -275,8 +365,9 @@ func updateReliabilityRowContent(db *sql.DB, id int64, thietBi, vanDe, phuongAn,
 // column's own DB default, since CarryForwardReliability needs to persist
 // a previously-excluded issue's Included=0 across days (see its comment);
 // rsmTag/edited likewise carry over which RSM entry the row came from and
-// whether someone has edited it (see SyncReliabilityFromRSM).
-func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, included bool, trangThai string, rsmTag sql.NullString, edited bool, start, end time.Time) bool {
+// whether someone has edited it (see SyncReliabilityFromRSM), and whether
+// it was auto-closed (see closeReliabilityGoneFromRSM).
+func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, thoiHan sql.NullTime, included bool, trangThai string, rsmTag sql.NullString, edited, rsmClosed bool, start, end time.Time) bool {
 	tx, err := db.Begin()
 	if err != nil {
 		return false
@@ -287,8 +378,8 @@ func insertReliabilityRow(db *sql.DB, thietBi, vanDe, phuongAn, donVi string, th
 		window.SQL(start), window.SQL(end)).Scan(&count); err != nil {
 		return false
 	}
-	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, Included, TrangThai, RsmTag, Edited) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)`,
-		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start, included, trangThai, rsmTag, edited); err != nil {
+	if _, err := tx.Exec(`INSERT INTO dbo.Reliability (TT, ThietBi, VanDe, PhuongAn, DonVi, ThoiHan, NgayBaoCao, CreatedBy, Included, TrangThai, RsmTag, Edited, RsmClosed) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?)`,
+		count+1, thietBi, vanDe, phuongAn, donVi, thoiHan, start, included, trangThai, rsmTag, edited, rsmClosed); err != nil {
 		return false
 	}
 	return tx.Commit() == nil

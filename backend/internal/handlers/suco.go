@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -13,18 +12,14 @@ import (
 	"bdscdailyreport/internal/window"
 )
 
-// ListSuCo syncs this window's RSM PDF section IV.3 (report.
-// SyncSuCoFromRSM) before reading — see ListReliability's comment for why
-// window.ReportDateForEntry is the right report date to sync against here
-// (the file for report date D lands ~06:30, still inside D's still-open
-// window, so opening this tab any time after that picks it up, editable/
-// deletable right here like any manually typed row).
+// ListSuCo lists the current entry window's rows (window.EntryWindow).
+// Sự cố is entered by hand only — the RSM PDF feeds Reliability, not this
+// table.
 //
 // With "?start=&end=YYYY-MM-DD" it instead lists every row whose printed
 // report date (window.ReportDateForEntry — the date in the report PDF's
 // own name) falls in that range, inclusive, so older rows can be found and
-// edited from this tab. No RSM sync in that mode, since the sync only ever
-// targets the current entry window anyway.
+// edited from this tab.
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	var start, end time.Time
@@ -43,10 +38,7 @@ func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 		start, _ = window.ReportWindow(reportRunAt(startD, rh, rm), rh, rm)
 		_, end = window.ReportWindow(reportRunAt(endD, rh, rm), rh, rm)
 	} else {
-		now := time.Now()
-		start, end = window.EntryWindow(now, rh, rm)
-		reportDate := window.ReportDateForEntry(now, rh, rm)
-		report.SyncSuCoFromRSM(e.DB, e.effectiveRSMPdfFolder(), reportDate, start, end)
+		start, end = window.EntryWindow(time.Now(), rh, rm)
 	}
 
 	out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
@@ -135,8 +127,7 @@ func (e *Env) DeleteSuCo(w http.ResponseWriter, r *http.Request) {
 	}
 	var ngayBaoCao time.Time
 	var createdBy string
-	var rsmKey sql.NullString
-	if err := e.DB.QueryRowContext(r.Context(), `SELECT NgayBaoCao, ISNULL(CreatedBy,''), RsmKey FROM dbo.SuCo WHERE Id = ?`, id).Scan(&ngayBaoCao, &createdBy, &rsmKey); err != nil {
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT NgayBaoCao, ISNULL(CreatedBy,'') FROM dbo.SuCo WHERE Id = ?`, id).Scan(&ngayBaoCao, &createdBy); err != nil {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
@@ -146,30 +137,7 @@ func (e *Env) DeleteSuCo(w http.ResponseWriter, r *http.Request) {
 	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
 		return
 	}
-	tx, err := e.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	defer tx.Rollback()
-	// An RSM-imported row is remembered as dismissed, otherwise the next
-	// SyncSuCoFromRSM would import the same PDF entry right back.
-	if rsmKey.Valid {
-		dismissedBy := ""
-		if user := currentUser(r); user != nil {
-			dismissedBy = user.EmployeeCode
-		}
-		if _, err := tx.ExecContext(r.Context(), `INSERT INTO dbo.SuCoRsmDismissed (RsmKey, NgayBaoCao, DismissedBy) VALUES (?, ?, ?)`,
-			rsmKey.String, window.SQL(ngayBaoCao), dismissedBy); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-	}
-	if _, err := tx.ExecContext(r.Context(), `DELETE FROM dbo.SuCo WHERE Id = ?`, id); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if err := tx.Commit(); err != nil {
+	if _, err := e.DB.ExecContext(r.Context(), `DELETE FROM dbo.SuCo WHERE Id = ?`, id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

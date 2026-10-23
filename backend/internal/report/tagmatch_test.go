@@ -19,6 +19,8 @@ func TestSameTag(t *testing.T) {
 		{"TK-5108A", "TK-5108B", false},
 		{"053-DF-105", "053-DF-105/053-DF-106", false},
 		{"Fire water pump", "Fire water pump P-972", false},
+		{"The fire detectors 053- DF-105 and 053-DF-106", "053-DF-105/053-DF-106", true},
+		{"040-AIT-151 - online analyser", "040-AIT-151", true},
 	}
 	for _, c := range cases {
 		if got := SameTag(c.a, c.b); got != c.want {
