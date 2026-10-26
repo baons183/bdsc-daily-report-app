@@ -76,7 +76,7 @@ func (e *Env) CreateCongViec(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "thieu Thiet bi")
 		return
 	}
-	var tienDo *float64
+	tienDo := new(float64) // để trống = 0
 	if v := r.FormValue("tienDo"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			tienDo = &f
@@ -246,7 +246,7 @@ func (e *Env) UpdateCongViec(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "thieu Thiet bi")
 		return
 	}
-	var tienDo *float64
+	tienDo := new(float64) // để trống = 0
 	if v := r.FormValue("tienDo"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			tienDo = &f

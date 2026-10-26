@@ -398,7 +398,8 @@ func fmtFloat(f *float64) string {
 }
 
 // fmtFloatOrZero is fmtFloat with "0" instead of blank for a missing value —
-// used only for the KPI table, where an un-entered figure should read as 0
+// used for every numeric column (KPI, Sự cố downtime, Công việc tiến độ),
+// where an un-entered figure should read as 0
 // rather than an empty cell.
 func fmtFloatOrZero(f *float64) string {
 	if f == nil {
@@ -546,14 +547,14 @@ func (b *builder) sectionSuCo(rows []models.SuCo) {
 	groups := []groupedHeader{
 		{Label: "TT"}, {Label: "Thiết bị"}, {Label: "DM"}, {Label: "Tình trạng"},
 		{Label: "Thời gian dừng (h)", Sub: []string{"PX (h)", "TB (h)"}},
-		{Label: "Phương án"}, {Label: "Đơn vị"}, {Label: "Thời hạn"},
+		{Label: "Phương án"}, {Label: "Thời hạn"},
 	}
-	widths := []float64{8, 26, 16, 40, 14, 14, 38, 20, 14}
+	widths := []float64{8, 26, 16, 50, 14, 14, 48, 14}
 	var data [][]string
 	for _, s := range rows {
 		data = append(data, []string{
 			strconv.Itoa(s.TT), s.ThietBi, s.DM, s.TinhTrang,
-			fmtFloat(s.ThoiGianDungPX), fmtFloat(s.ThoiGianDungTB), s.PhuongAn, s.DonVi, fmtDate(s.ThoiHan),
+			fmtFloatOrZero(s.ThoiGianDungPX), fmtFloatOrZero(s.ThoiGianDungTB), s.PhuongAn, fmtDate(s.ThoiHan),
 		})
 	}
 	b.tableGrouped(groups, widths, data, "Không có sự cố/vấn đề kỹ thuật ảnh hưởng vận hành.")
@@ -598,7 +599,7 @@ func (b *builder) sectionCongViec(rows []models.CongViec) {
 	widths := []float64{8, 18, 12, 44, 25, 18, 43, 22}
 	var data [][]string
 	for _, c := range rows {
-		data = append(data, []string{strconv.Itoa(c.TT), c.ThietBi, c.DM, c.NoiDung, c.KeHoach, fmtFloat(c.TienDo), c.HomNay, c.NgayMai})
+		data = append(data, []string{strconv.Itoa(c.TT), c.ThietBi, c.DM, c.NoiDung, c.KeHoach, fmtFloatOrZero(c.TienDo), c.HomNay, c.NgayMai})
 	}
 	b.table(headers, widths, data, "Các công việc đang được lập kế hoạch và chuẩn bị nguồn lực.")
 }

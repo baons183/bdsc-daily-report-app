@@ -72,6 +72,7 @@ func (e *Env) CreateSuCo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "thieu hoac sai Loai su co (Accident/Near Miss/Technical Event)")
 		return
 	}
+	zeroIfNil(&in.ThoiGianDungPX, &in.ThoiGianDungTB)
 	now := time.Now()
 	if !checkNotLocked(w, r, e.DB, now) {
 		return
@@ -182,6 +183,7 @@ func (e *Env) UpdateSuCo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "thieu hoac sai Loai su co (Accident/Near Miss/Technical Event)")
 		return
 	}
+	zeroIfNil(&in.ThoiGianDungPX, &in.ThoiGianDungTB)
 	if _, err := e.DB.ExecContext(r.Context(), `
 UPDATE dbo.SuCo SET ThietBi=?, DM=?, LoaiSuCo=?, TinhTrang=?, ThoiGianDungPX=?, ThoiGianDungTB=?, PhuongAn=?, DonVi=?, ThoiHan=?, DeXuat=?, LuuY=?, TrangThai=?
 WHERE Id=?`,

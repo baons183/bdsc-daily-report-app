@@ -80,6 +80,7 @@ func (e *Env) SaveKPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, k := range in {
+		zeroIfNil(&k.KeHoach)
 		if _, err := tx.ExecContext(r.Context(), `
 INSERT INTO dbo.KPIEntries (ChiTieu, Nhom, DVT, KeHoach, ThucHien, LuyKeThang, DanhGia, NgayBaoCao, CreatedBy)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -113,11 +113,11 @@ func emailSuCoSection(b *strings.Builder, rows []models.SuCo) {
 		return
 	}
 	b.WriteString(emailTableStart())
-	b.WriteString(`<tr style="background:#e0e0e0;"><th rowspan="2">TT</th><th rowspan="2">Thiết bị</th><th rowspan="2">DM</th><th rowspan="2">Tình trạng</th><th colspan="2">Thời gian dừng (h)</th><th rowspan="2">Phương án</th><th rowspan="2">Đơn vị</th><th rowspan="2">Thời hạn</th></tr>`)
+	b.WriteString(`<tr style="background:#e0e0e0;"><th rowspan="2">TT</th><th rowspan="2">Thiết bị</th><th rowspan="2">DM</th><th rowspan="2">Tình trạng</th><th colspan="2">Thời gian dừng (h)</th><th rowspan="2">Phương án</th><th rowspan="2">Thời hạn</th></tr>`)
 	b.WriteString(`<tr style="background:#e0e0e0;"><th>PX (h)</th><th>TB (h)</th></tr>`)
 	for _, s := range rows {
-		fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td style="text-align:center;">%s</td><td style="text-align:center;">%s</td><td>%s</td><td>%s</td><td style="text-align:center;">%s</td></tr>`,
-			s.TT, htmlText(s.ThietBi), htmlText(s.DM), htmlText(s.TinhTrang), fmtFloat(s.ThoiGianDungPX), fmtFloat(s.ThoiGianDungTB), htmlText(s.PhuongAn), htmlText(s.DonVi), fmtDate(s.ThoiHan))
+		fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td style="text-align:center;">%s</td><td style="text-align:center;">%s</td><td>%s</td><td style="text-align:center;">%s</td></tr>`,
+			s.TT, htmlText(s.ThietBi), htmlText(s.DM), htmlText(s.TinhTrang), fmtFloatOrZero(s.ThoiGianDungPX), fmtFloatOrZero(s.ThoiGianDungTB), htmlText(s.PhuongAn), fmtDate(s.ThoiHan))
 	}
 	b.WriteString(`</table>`)
 }
@@ -172,7 +172,7 @@ func emailCongViecSection(b *strings.Builder, rows []models.CongViec) {
 	b.WriteString(`<tr style="background:#e0e0e0;"><th>TT</th><th>Thiết bị</th><th>DM</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th><th>Hôm nay</th><th>Ngày mai</th></tr>`)
 	for _, c := range rows {
 		fmt.Fprintf(b, `<tr><td style="text-align:center;">%d</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td>%s</td><td style="text-align:center;">%s</td><td>%s</td><td>%s</td></tr>`,
-			c.TT, htmlText(c.ThietBi), htmlText(c.DM), htmlText(c.NoiDung), htmlText(c.KeHoach), fmtFloat(c.TienDo), htmlText(c.HomNay), htmlText(c.NgayMai))
+			c.TT, htmlText(c.ThietBi), htmlText(c.DM), htmlText(c.NoiDung), htmlText(c.KeHoach), fmtFloatOrZero(c.TienDo), htmlText(c.HomNay), htmlText(c.NgayMai))
 	}
 	b.WriteString(`</table>`)
 }

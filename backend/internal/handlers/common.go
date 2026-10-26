@@ -62,6 +62,18 @@ FROM dbo.%s t JOIN ordered o ON t.Id = o.Id`, table, table)
 	return err
 }
 
+// zeroIfNil turns a blank numeric field into 0 — every number the user can
+// type (Sự cố downtime, Công việc tiến độ, KPI) is stored as 0 when left
+// empty, never NULL, so reports always show a figure.
+func zeroIfNil(ps ...**float64) {
+	for _, p := range ps {
+		if *p == nil {
+			z := 0.0
+			*p = &z
+		}
+	}
+}
+
 // normalizeTrangThai maps any "trạng thái thực hiện" value coming from the
 // client to one of the 3 fixed states, falling back to "in_progress" for
 // anything unrecognized (empty string included) — a freshly entered row is

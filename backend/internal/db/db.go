@@ -354,6 +354,12 @@ BEGIN
   EXEC('UPDATE dbo.Reliability SET Edited = 1, RsmTag = NULL WHERE ISNULL(CreatedBy, '''') = '''' AND ThietBi IN (SELECT ThietBi FROM dbo.Reliability WHERE ISNULL(CreatedBy, '''') <> '''')');
 END;
 
+-- Blank numeric fields are stored as 0 (handlers.zeroIfNil) — bring older
+-- NULLs in line so every report shows a figure. Cheap and idempotent.
+UPDATE dbo.SuCo SET ThoiGianDungPX = 0 WHERE ThoiGianDungPX IS NULL;
+UPDATE dbo.SuCo SET ThoiGianDungTB = 0 WHERE ThoiGianDungTB IS NULL;
+UPDATE dbo.CongViec SET TienDo = 0 WHERE TienDo IS NULL;
+
 -- One row per auto-imported Sự cố a user deleted: SyncSuCoFromRSM skips any
 -- RsmKey listed here for the same window, so deleting a row RSM keeps
 -- listing actually sticks.

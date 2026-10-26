@@ -151,7 +151,7 @@
         <label>Phòng<select name="dm"><option>ROT</option><option>STA</option><option>INT</option><option>ELE</option><option>MWS</option></select></label>
         <label class="half newrow">Nội dung công việc<textarea name="noiDung"></textarea></label>
         <label>Kế hoạch<input name="keHoach"></label>
-        <label>Tiến độ (%)<input name="tienDo" type="number" step="any"></label>
+        <label>Tiến độ (%)<input name="tienDo" type="number" step="any" value="0"></label>
         <label class="half newrow">Thực hiện hôm nay<textarea name="homNay"></textarea></label>
         <label class="half">Kế hoạch ngày mai<textarea name="ngayMai"></textarea></label>
         <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
@@ -237,12 +237,11 @@
               <option value="Near Miss">Near Miss</option>
               <option value="Technical Event">Technical Event</option>
             </select></label>
-            <label class="tg">TG dừng PX (h)<input name="thoiGianDungPX" type="number" step="any"></label>
-            <label class="tg">TG dừng TB (h)<input name="thoiGianDungTB" type="number" step="any"></label>
+            <label class="tg">TG dừng PX (h)<input name="thoiGianDungPX" type="number" step="any" value="0"></label>
+            <label class="tg">TG dừng TB (h)<input name="thoiGianDungTB" type="number" step="any" value="0"></label>
           </div>
           <label class="half">Tình trạng<textarea name="tinhTrang"></textarea></label>
           <label class="half">Phương án xử lý<textarea name="phuongAn"></textarea></label>
-          <label>Đơn vị thực hiện<input name="donVi"></label>
           <label>Thời hạn<input name="thoiHan" type="date"></label>
           <label class="half newrow">Lưu ý<textarea name="luuY"></textarea></label>
           <label class="half">Đề xuất<textarea name="deXuat"></textarea></label>
