@@ -48,6 +48,8 @@ type GiamSat struct {
 	NgayBaoCao time.Time `json:"ngayBaoCao"`
 	CreatedBy  string    `json:"createdBy"`
 	TrangThai  string    `json:"trangThai"`
+	// ReportDate: as SuCo.ReportDate, filled in only by ListGiamSat.
+	ReportDate string `json:"reportDate,omitempty"`
 }
 
 type Attachment struct {
@@ -74,6 +76,8 @@ type CongViec struct {
 	CreatedBy   string       `json:"createdBy"`
 	Attachments []Attachment `json:"attachments"`
 	TrangThai   string       `json:"trangThai"`
+	// ReportDate: as SuCo.ReportDate, filled in only by ListCongViec.
+	ReportDate string `json:"reportDate,omitempty"`
 }
 
 type KPIEntry struct {

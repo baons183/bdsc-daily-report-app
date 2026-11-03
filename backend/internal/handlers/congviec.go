@@ -19,11 +19,17 @@ import (
 
 func (e *Env) ListCongViec(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
-	start, end := window.EntryWindow(time.Now(), rh, rm)
+	start, end, ok := listWindow(w, r, rh, rm)
+	if !ok {
+		return
+	}
 	out, err := report.FetchCongViec(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
+	}
+	for i := range out {
+		out[i].ReportDate = window.ReportDateForEntry(out[i].NgayBaoCao, rh, rm).Format("2006-01-02")
 	}
 	writeJSON(w, 200, out)
 }

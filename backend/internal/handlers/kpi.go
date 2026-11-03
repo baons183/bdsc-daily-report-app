@@ -43,6 +43,7 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ? ORDER BY Id`, today)
 		}
 		out = append(out, k)
 	}
+	out = report.WithAllKPICategories(out)
 	rh, rm := db.ReportTime(e.DB, 8, 0)
 	start, end := window.EntryWindow(time.Now(), rh, rm)
 	if err := report.ApplyKPIAutoCounts(r.Context(), e.DB, out, start, end); err != nil {

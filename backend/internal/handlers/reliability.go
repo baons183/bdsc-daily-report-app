@@ -267,8 +267,7 @@ func (e *Env) SetReliabilityTrangThai(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var createdBy string
-	var ngayBaoCao time.Time
-	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.Reliability WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,'') FROM dbo.Reliability WHERE Id = ?`, id).Scan(&createdBy); err != nil {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
@@ -276,9 +275,8 @@ func (e *Env) SetReliabilityTrangThai(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "ban khong co quyen doi trang thai dong nay")
 		return
 	}
-	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
-		return
-	}
+	// No checkNotLocked: as setTrangThai, status stays changeable on
+	// reviewed/approved report dates.
 	var in setReliabilityTrangThaiReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, "du lieu khong hop le: "+err.Error())

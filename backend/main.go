@@ -56,12 +56,14 @@ func main() {
 	mux.Handle("POST /api/giamsat", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.CreateGiamSat))))
 	mux.Handle("PUT /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.UpdateGiamSat))))
 	mux.Handle("DELETE /api/giamsat/{id}", authMw(http.HandlerFunc(auth.RequireRole("GiamSat", env.DeleteGiamSat))))
+	mux.Handle("POST /api/giamsat/{id}/trangthai", authMw(http.HandlerFunc(auth.RequireEditRole("GiamSat", env.SetGiamSatTrangThai))))
 
 	mux.Handle("GET /api/congviec", authMw(http.HandlerFunc(env.ListCongViec)))
 	mux.Handle("GET /api/congviec/yesterday", authMw(http.HandlerFunc(env.ListCongViecYesterday)))
 	mux.Handle("POST /api/congviec", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.CreateCongViec))))
 	mux.Handle("PUT /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.UpdateCongViec))))
 	mux.Handle("DELETE /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.DeleteCongViec))))
+	mux.Handle("POST /api/congviec/{id}/trangthai", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.SetCongViecTrangThai))))
 
 	mux.Handle("GET /api/kpi", authMw(http.HandlerFunc(env.ListKPI)))
 	mux.Handle("POST /api/kpi", authMw(http.HandlerFunc(auth.RequireRole("KPI", env.SaveKPI))))

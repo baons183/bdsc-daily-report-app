@@ -12,35 +12,15 @@ import (
 	"bdscdailyreport/internal/window"
 )
 
-// ListSuCo lists the current entry window's rows (window.EntryWindow).
-// Sự cố is entered by hand only — the RSM PDF feeds Reliability, not this
-// table.
-//
-// With "?start=&end=YYYY-MM-DD" it instead lists every row whose printed
-// report date (window.ReportDateForEntry — the date in the report PDF's
-// own name) falls in that range, inclusive, so older rows can be found and
-// edited from this tab.
+// ListSuCo lists the rows in listWindow (current entry window, or a report
+// date range). Sự cố is entered by hand only — the RSM PDF feeds
+// Reliability, not this table.
 func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 	rh, rm := db.ReportTime(e.DB, 8, 0)
-	var start, end time.Time
-	if startStr, endStr := r.URL.Query().Get("start"), r.URL.Query().Get("end"); startStr != "" || endStr != "" {
-		startD, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
-		endD, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
-		if err1 != nil || err2 != nil {
-			writeErr(w, 400, "start/end khong hop le, can dang YYYY-MM-DD")
-			return
-		}
-		if endD.Before(startD) {
-			writeErr(w, 400, "ngay ket thuc phai sau ngay bat dau")
-			return
-		}
-		// Report date D's window is the one the D+1 report run closes.
-		start, _ = window.ReportWindow(reportRunAt(startD, rh, rm), rh, rm)
-		_, end = window.ReportWindow(reportRunAt(endD, rh, rm), rh, rm)
-	} else {
-		start, end = window.EntryWindow(time.Now(), rh, rm)
+	start, end, ok := listWindow(w, r, rh, rm)
+	if !ok {
+		return
 	}
-
 	out, err := report.FetchSuCo(r.Context(), e.DB, start, end)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -50,6 +30,34 @@ func (e *Env) ListSuCo(w http.ResponseWriter, r *http.Request) {
 		out[i].ReportDate = window.ReportDateForEntry(out[i].NgayBaoCao, rh, rm).Format("2006-01-02")
 	}
 	writeJSON(w, 200, out)
+}
+
+// listWindow is the NgayBaoCao range the Sự cố/Giám sát/Công việc lists
+// show: the current entry window by default, or with "?start=&end=
+// YYYY-MM-DD" every row whose printed report date
+// (window.ReportDateForEntry) falls in that range, inclusive — so older rows
+// can be found and edited from these tabs. On a bad range it writes the 400
+// itself and returns ok=false.
+func listWindow(w http.ResponseWriter, r *http.Request, rh, rm int) (start, end time.Time, ok bool) {
+	startStr, endStr := r.URL.Query().Get("start"), r.URL.Query().Get("end")
+	if startStr == "" && endStr == "" {
+		start, end = window.EntryWindow(time.Now(), rh, rm)
+		return start, end, true
+	}
+	startD, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
+	endD, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
+	if err1 != nil || err2 != nil {
+		writeErr(w, 400, "start/end khong hop le, can dang YYYY-MM-DD")
+		return start, end, false
+	}
+	if endD.Before(startD) {
+		writeErr(w, 400, "ngay ket thuc phai sau ngay bat dau")
+		return start, end, false
+	}
+	// Report date D's window is the one the D+1 report run closes.
+	start, _ = window.ReportWindow(reportRunAt(startD, rh, rm), rh, rm)
+	_, end = window.ReportWindow(reportRunAt(endD, rh, rm), rh, rm)
+	return start, end, true
 }
 
 // reportRunAt is when the report for report date d is generated: d+1 at
@@ -194,37 +202,49 @@ WHERE Id=?`,
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
-type setSuCoTrangThaiReq struct {
+type setTrangThaiReq struct {
 	TrangThai string `json:"trangThai"`
 }
 
-// SetSuCoTrangThai changes "trạng thái thực hiện" for one row inline from
-// the Sự cố table's own dropdown, without going through the full Sửa form
-// — same permission and lock checks as UpdateSuCo.
+// SetSuCoTrangThai / SetGiamSatTrangThai / SetCongViecTrangThai change
+// "trạng thái thực hiện" for one row inline from the table's own dropdown,
+// without going through the full Sửa form — same permission check as the
+// Update handlers, but deliberately no checkNotLocked: old rows' status is
+// meant to be updatable even after their report date was reviewed/approved
+// (only the status — every other field stays locked).
 func (e *Env) SetSuCoTrangThai(w http.ResponseWriter, r *http.Request) {
+	e.setTrangThai(w, r, "SuCo")
+}
+
+func (e *Env) SetGiamSatTrangThai(w http.ResponseWriter, r *http.Request) {
+	e.setTrangThai(w, r, "GiamSat")
+}
+
+func (e *Env) SetCongViecTrangThai(w http.ResponseWriter, r *http.Request) {
+	e.setTrangThai(w, r, "CongViec")
+}
+
+// setTrangThai: table is one of the fixed names above, never user input.
+func (e *Env) setTrangThai(w http.ResponseWriter, r *http.Request, table string) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeErr(w, 400, "id khong hop le")
 		return
 	}
 	var createdBy string
-	var ngayBaoCao time.Time
-	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.SuCo WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,'') FROM dbo.`+table+` WHERE Id = ?`, id).Scan(&createdBy); err != nil {
 		writeErr(w, 404, "khong tim thay dong nay")
 		return
 	}
 	if !checkEditOwnership(w, r, createdBy) {
 		return
 	}
-	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
-		return
-	}
-	var in setSuCoTrangThaiReq
+	var in setTrangThaiReq
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, "du lieu khong hop le: "+err.Error())
 		return
 	}
-	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.SuCo SET TrangThai = ? WHERE Id = ?`, normalizeTrangThai(in.TrangThai), id); err != nil {
+	if _, err := e.DB.ExecContext(r.Context(), `UPDATE dbo.`+table+` SET TrangThai = ? WHERE Id = ?`, normalizeTrangThai(in.TrangThai), id); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}

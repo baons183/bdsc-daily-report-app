@@ -267,58 +267,111 @@ function exitEditMode(form) {
   if (cancelBtn) cancelBtn.hidden = true;
 }
 
-// ---- Sự cố ----
-async function loadSuCo() {
-  // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
-  document.getElementById("form-suco").hidden = !hasRole("SuCo");
-  // Không chọn ngày = danh sách của ca hiện tại (như cũ); chọn Từ/Đến ngày
-  // = mọi dòng có Ngày báo cáo (ngày in trên tên file báo cáo) trong khoảng
-  // đó, để tìm lại và sửa dòng cũ.
-  const start = document.getElementById("suco-start").value;
-  const end = document.getElementById("suco-end").value;
-  const ranged = !!(start || end);
-  const note = document.getElementById("suco-range-note");
-  if (ranged && !(start && end)) { note.textContent = "Chọn đủ Từ ngày/Đến ngày."; return; }
-  const url = ranged ? `/api/suco?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : "/api/suco";
+// ---- Bộ lọc danh sách Sự cố / Giám sát / Công việc ----
+// Mặc định hiện ca hiện tại (như cũ); chọn Từ/Đến ngày = mọi dòng có Ngày
+// báo cáo (ngày in trên tên file báo cáo) trong khoảng đó, để tìm lại và
+// sửa dòng cũ. Ô tìm kiếm + trạng thái chỉ lọc lúc vẽ bảng (LIST_ROWS giữ
+// đủ dòng đã tải), không gọi lại server.
+const LIST_ROWS = { suco: [], giamsat: [], congviec: [] };
+const LIST_RANGED = { suco: false, giamsat: false, congviec: false };
+const LIST_RENDER = { suco: () => renderSuCo(), giamsat: () => renderGiamSat(), congviec: () => renderCongViecToday() };
+const LIST_LOAD = { suco: () => loadSuCo(), giamsat: () => loadGiamSat(), congviec: () => loadCongViecToday() };
+function buildListFilter(kind) {
+  const cb = v => `<label style="font-weight:normal; display:inline-flex; align-items:center; gap:3px; margin-left:6px;"><input type="checkbox" class="status-cb" data-group="${kind}" value="${v}" checked onchange="LIST_RENDER.${kind}()">${trangThaiLabel(v)}</label>`;
+  document.getElementById(`filter-${kind}`).innerHTML = `
+    <label>Báo cáo từ ngày: <input type="date" id="${kind}-start"></label>
+    <label>đến ngày: <input type="date" id="${kind}-end"></label>
+    <button class="btn" type="button" onclick="LIST_LOAD.${kind}()" style="margin-top:0">Xem</button>
+    <button class="btn" type="button" onclick="resetListRange('${kind}')" style="margin-top:0; background:#888">Hôm nay</button>
+    <input type="search" id="${kind}-q" placeholder="Tìm thiết bị, phòng, nội dung..." oninput="LIST_RENDER.${kind}()" style="min-width:240px">
+    <span>Trạng thái:${["not_started", "in_progress", "done"].map(cb).join("")}</span>
+    <span id="${kind}-range-note" style="color:#555"></span>`;
+}
+["suco", "giamsat", "congviec"].forEach(buildListFilter);
+// Tải dòng theo bộ lọc ngày của trang `kind` (chỉ chọn 1 ô ngày = đúng ngày đó).
+async function fetchListRows(kind) {
+  let start = document.getElementById(`${kind}-start`).value;
+  let end = document.getElementById(`${kind}-end`).value;
+  if (start && !end) end = start;
+  if (end && !start) start = end;
+  const ranged = !!start;
+  const url = ranged ? `/api/${kind}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : `/api/${kind}`;
   const rows = (await api(url)) || [];
-  note.textContent = ranged ? `${rows.length} dòng, báo cáo ngày ${fmtDMY(start)} đến ${fmtDMY(end)}` : "Đang hiện ca hiện tại";
-  ROWS_CACHE.suco = Object.fromEntries(rows.map(r => [r.id, r]));
-  const t = document.getElementById("table-suco");
-  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
-      <th>Phương án xử lý</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
-    filterByStatusGroup("suco", rows).map(r => `<tr>
-      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
-      <td>${r.thoiGianDungPX ?? 0}</td><td>${r.thoiGianDungTB ?? 0}</td>
-      <td>${esc(r.phuongAn)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
-      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${sucoTrangThaiSelect(r)}</td>
-      <td>${actionButtons("SuCo", r)}</td>
-    </tr>`).join("");
+  LIST_ROWS[kind] = rows;
+  LIST_RANGED[kind] = ranged;
+  ROWS_CACHE[kind] = Object.fromEntries(rows.map(r => [r.id, r]));
+  document.getElementById(`${kind}-range-note`).dataset.base = ranged
+    ? (start === end ? `báo cáo ngày ${fmtDMY(start)}` : `báo cáo ngày ${fmtDMY(start)} đến ${fmtDMY(end)}`)
+    : "ca hiện tại (chọn Từ/Đến ngày để tìm bản ghi cũ)";
+}
+function resetListRange(kind) {
+  document.getElementById(`${kind}-start`).value = "";
+  document.getElementById(`${kind}-end`).value = "";
+  LIST_LOAD[kind]();
+}
+// Bỏ dấu để gõ "dung may" vẫn khớp "Dừng máy".
+function foldVN(s) {
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+}
+// Lọc theo trạng thái + ô tìm kiếm (mọi từ gõ vào đều phải có trong 1 trong
+// các cột chữ của dòng, kể cả Ngày báo cáo dd/mm/yyyy và tên trạng thái).
+function filterListRows(kind) {
+  const all = LIST_ROWS[kind];
+  const terms = foldVN(document.getElementById(`${kind}-q`).value).split(/\s+/).filter(Boolean);
+  const rows = filterByStatusGroup(kind, all).filter(r => {
+    if (!terms.length) return true;
+    const hay = foldVN([
+      ...Object.values(r).filter(v => typeof v === "string"),
+      r.reportDate ? fmtDMY(r.reportDate) : "", trangThaiLabel(r.trangThai),
+    ].join(" "));
+    return terms.every(t => hay.includes(t));
+  });
+  const note = document.getElementById(`${kind}-range-note`);
+  note.textContent = `${rows.length}/${all.length} dòng, ${note.dataset.base || ""}`;
+  return rows;
 }
 // Đổi trạng thái ngay tại bảng, không cần bấm Sửa — cùng quyền với nút Sửa
 // (canEdit, khớp checkEditOwnership phía server).
-function sucoTrangThaiSelect(r) {
+function listTrangThaiSelect(kind, r) {
   const disabled = canEdit(r.createdBy) ? "" : "disabled";
   const cur = r.trangThai || "in_progress";
   const opt = v => `<option value="${v}" ${cur === v ? "selected" : ""}>${trangThaiLabel(v)}</option>`;
-  return `<select ${disabled} onchange="setSuCoTrangThai(${r.id}, this.value)">${["not_started", "in_progress", "done"].map(opt).join("")}</select>`;
+  return `<select ${disabled} onchange="setListTrangThai('${kind}', ${r.id}, this.value)">${["not_started", "in_progress", "done"].map(opt).join("")}</select>`;
 }
-async function setSuCoTrangThai(id, trangThai) {
+async function setListTrangThai(kind, id, trangThai) {
   try {
-    await api(`/api/suco/${id}/trangthai`, {
+    await api(`/api/${kind}/${id}/trangthai`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trangThai }),
     });
-    if (ROWS_CACHE.suco[id]) ROWS_CACHE.suco[id].trangThai = trangThai;
+    if (ROWS_CACHE[kind][id]) ROWS_CACHE[kind][id].trangThai = trangThai;
+    LIST_RENDER[kind]();
   } catch (e) {
     alert("Lỗi: " + e.message);
-    loadSuCo();
+    LIST_LOAD[kind]();
   }
 }
-function resetSuCoRange() {
-  document.getElementById("suco-start").value = "";
-  document.getElementById("suco-end").value = "";
-  loadSuCo();
+
+// ---- Sự cố ----
+async function loadSuCo() {
+  // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
+  document.getElementById("form-suco").hidden = !hasRole("SuCo");
+  await fetchListRows("suco");
+  renderSuCo();
+}
+function renderSuCo() {
+  const ranged = LIST_RANGED.suco;
+  const t = document.getElementById("table-suco");
+  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Loại sự cố</th><th>Tình trạng</th><th>TG dừng PX (h)</th><th>TG dừng TB (h)</th>
+      <th>Phương án xử lý</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
+    filterListRows("suco").map(r => `<tr>
+      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.loaiSuCo)}</td><td>${esc(r.tinhTrang)}</td>
+      <td>${r.thoiGianDungPX ?? 0}</td><td>${r.thoiGianDungTB ?? 0}</td>
+      <td>${esc(r.phuongAn)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
+      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${listTrangThaiSelect("suco", r)}</td>
+      <td>${actionButtons("SuCo", r)}</td>
+    </tr>`).join("");
 }
 function fmtDMY(ymd) {
   const [y, m, d] = ymd.split("-");
@@ -355,15 +408,18 @@ document.getElementById("form-suco").addEventListener("submit", async e => {
 async function loadGiamSat() {
   // Moderator xem/sửa được nhưng không tạo dòng mới — ẩn form thêm dòng.
   document.getElementById("form-giamsat").hidden = !hasRole("GiamSat");
-  const rows = (await api("/api/giamsat")) || [];
-  ROWS_CACHE.giamsat = Object.fromEntries(rows.map(r => [r.id, r]));
+  await fetchListRows("giamsat");
+  renderGiamSat();
+}
+function renderGiamSat() {
+  const ranged = LIST_RANGED.giamsat;
   const t = document.getElementById("table-giamsat");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
+  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Tình trạng</th><th>Rủi ro</th><th>Phương án xử lý</th>
       <th>Đơn vị thực hiện</th><th>Thời hạn</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th></th></tr>` +
-    filterByStatusGroup("giamsat", rows).map(r => `<tr>
-      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
+    filterListRows("giamsat").map(r => `<tr>
+      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.tinhTrang)}</td>
       <td>${esc(r.ruiRo)}</td><td>${esc(r.phuongAn)}</td><td>${esc(r.donVi)}</td><td>${r.thoiHan ? r.thoiHan.substring(0,10) : ""}</td>
-      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
+      <td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${listTrangThaiSelect("giamsat", r)}</td>
       <td>${actionButtons("GiamSat", r)}</td>
     </tr>`).join("");
 }
@@ -398,14 +454,17 @@ async function loadCongViec() {
   await Promise.all([loadCongViecToday(), loadCongViecYesterday()]);
 }
 async function loadCongViecToday() {
-  const rows = (await api("/api/congviec")) || [];
-  ROWS_CACHE.congviec = Object.fromEntries(rows.map(r => [r.id, r]));
+  await fetchListRows("congviec");
+  renderCongViecToday();
+}
+function renderCongViecToday() {
+  const ranged = LIST_RANGED.congviec;
   const t = document.getElementById("table-congviec");
-  t.innerHTML = `<tr><th>TT</th><th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
+  t.innerHTML = `<tr><th>TT</th>${ranged ? "<th>Ngày báo cáo</th>" : ""}<th>Thiết bị</th><th>Phòng</th><th>Nội dung</th><th>Kế hoạch</th><th>Tiến độ (%)</th>
       <th>Hôm nay</th><th>Ngày mai</th><th>Đề xuất</th><th>Lưu ý</th><th>Trạng thái</th><th>Ảnh</th><th></th></tr>` +
-    filterByStatusGroup("congviec", rows).map(r => `<tr>
-      <td>${r.tt}</td><td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? 0}</td>
-      <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td><td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${esc(trangThaiLabel(r.trangThai))}</td>
+    filterListRows("congviec").map(r => `<tr>
+      <td>${r.tt}</td>${ranged ? `<td>${r.reportDate ? fmtDMY(r.reportDate) : ""}</td>` : ""}<td>${esc(r.thietBi)}</td><td>${esc(r.dm)}</td><td>${esc(r.noiDung)}</td><td>${esc(r.keHoach)}</td><td>${r.tienDo ?? 0}</td>
+      <td>${esc(r.homNay)}</td><td>${esc(r.ngayMai)}</td><td>${esc(r.deXuat)}</td><td>${esc(r.luuY)}</td><td>${listTrangThaiSelect("congviec", r)}</td>
       <td>${(r.attachments||[]).map(a => `<img class="thumb" src="/uploads/${a.filePath}">`).join("")}</td>
       <td>${actionButtons("CongViec", r)}</td>
     </tr>`).join("");

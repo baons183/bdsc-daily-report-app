@@ -126,10 +126,31 @@ FROM dbo.KPIEntries WHERE NgayBaoCao = ? ORDER BY Id`, reportDate.Format("2006-0
 		}
 		out = append(out, k)
 	}
+	out = WithAllKPICategories(out)
 	if err := ApplyKPIAutoCounts(ctx, db, out, start, end); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// WithAllKPICategories appends a blank row (Kế hoạch/Thực hiện 0) for every
+// fixed KPI category missing from rows — a day nobody pressed "Lưu KPI" for
+// has no KPIEntries rows at all, and ApplyKPIAutoCounts only fills in rows
+// that exist, so without this its Thực hiện tự đếm and Lũy kế tháng would
+// all read 0 even though Sự cố/earlier days have real figures.
+func WithAllKPICategories(rows []models.KPIEntry) []models.KPIEntry {
+	have := map[string]bool{}
+	for _, r := range rows {
+		have[r.ChiTieu] = true
+	}
+	for _, c := range kpiCategories {
+		if have[c.ChiTieu] {
+			continue
+		}
+		kh, th := 0.0, 0.0
+		rows = append(rows, models.KPIEntry{ChiTieu: c.ChiTieu, Nhom: c.Nhom, DVT: c.DVT, KeHoach: &kh, ThucHien: &th})
+	}
+	return rows
 }
 
 // KPIAutoCountMap maps each KPI ChiTieu that's auto-counted from Sự cố
