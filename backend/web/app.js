@@ -101,7 +101,9 @@ async function api(path, opts = {}) {
 // với Maintenance Report App/Checksheet), Portal chuyển về đây kèm ?token=,
 // đổi lấy token riêng của app này (có sẵn Roles theo UserAppRole, xem
 // SsoExchange trong auth_handlers.go) rồi mới vào được nội dung.
-const PORTAL_URL = "http://pcu-mnt-250223:8100";
+// Lấy từ PORTAL_URL trong .env (server trả qua /config.js) — máy chính và
+// máy cold standby mỗi máy trỏ về Portal của chính nó.
+const PORTAL_URL = window.PORTAL_URL || "http://pcu-mnt-250223:8100";
 
 function redirectToPortal() {
   const here = window.location.origin + window.location.pathname;

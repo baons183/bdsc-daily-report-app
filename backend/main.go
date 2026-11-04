@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -148,6 +149,13 @@ func main() {
 
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir))))
 	mux.Handle("GET /reports/", http.StripPrefix("/reports/", http.FileServer(http.Dir(cfg.ReportsDir))))
+	// Per-machine settings the static web UI needs (index.html loads this
+	// before app.js) — the browser can't read .env itself.
+	portalURLJS, _ := json.Marshal(cfg.PortalURL)
+	mux.Handle("GET /config.js", noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Write([]byte("window.PORTAL_URL = " + string(portalURLJS) + ";\n"))
+	})))
 	mux.Handle("/", noCache(http.FileServer(http.Dir("./web"))))
 
 	go scheduleDailyReport(conn, cfg)

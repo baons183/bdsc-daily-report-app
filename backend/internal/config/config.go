@@ -34,6 +34,10 @@ type Config struct {
 	// message (e.g. http://10.x.x.x:8090) — blank omits the link instead of
 	// printing a broken one.
 	AppBaseURL string
+	// Shared login Portal the web UI sends not-logged-in users to (served to
+	// the browser as /config.js, see main.go) — set per machine in .env so
+	// the cold standby points at its own Portal, not pcu-mnt-250223's.
+	PortalURL string
 	// Name of the (separate, shared) database holding Asset_Master — the same
 	// equipment master table MaintenanceReportApp/checksheet-app already use
 	// for their own Thiết bị lookups. Same SQL Server instance/login as our
@@ -104,6 +108,7 @@ func Load() Config {
 		ReportSharePointURLPrefix: getEnv("REPORT_SHAREPOINT_URL_PREFIX", ""),
 		EmailFlowApprovalURL:      getEnv("EMAIL_FLOW_APPROVAL_URL", ""),
 		AppBaseURL:                getEnv("APP_BASE_URL", ""),
+		PortalURL:                 getEnv("PORTAL_URL", "http://pcu-mnt-250223:8100"),
 		RSMPdfFolder:              getEnv("RSM_PDF_FOLDER", ""),
 		ReportHour:                8,
 		ReportMinute:              0,
