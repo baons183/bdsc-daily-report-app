@@ -84,6 +84,24 @@ func ReportDateForEntry(t time.Time, reportHour, reportMinute int) time.Time {
 	return end.AddDate(0, 0, -1)
 }
 
+// ApprovalDeadline returns the moment the Admin-configured Kiểm tra or Phê
+// duyệt deadline (hour:minute) falls for printed report date reportDate: the
+// first hour:minute strictly after that report was generated (reportDate+1 at
+// reportHour:reportMinute). With the report at 09:00 and the deadline at
+// 08:50, that is 08:50 the morning AFTER generation — almost a full day to
+// review — not 08:50 on the generation day itself, which has already passed
+// by the time the report exists (and used to make the job auto-review every
+// new report at 09:01, a minute after it was generated). A deadline later
+// than the report time (e.g. 10:00) still lands on the generation day.
+func ApprovalDeadline(reportDate time.Time, hour, minute, reportHour, reportMinute int) time.Time {
+	generated := cutoff(reportDate.AddDate(0, 0, 1), reportHour, reportMinute)
+	d := cutoff(generated, hour, minute)
+	if !d.After(generated) {
+		d = d.AddDate(0, 0, 1)
+	}
+	return d
+}
+
 // CurrentReportDate returns the printed report date that is "active" for
 // review/approval right now, at time `t` — the most recently generated
 // daily report: today's (t's date minus 1) if today's report run has
