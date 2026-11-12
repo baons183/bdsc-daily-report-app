@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"bdscdailyreport/internal/db"
@@ -197,8 +199,7 @@ func saveCongViecPhotos(ctx context.Context, tx *sql.Tx, uploadsDir string, cong
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join(dir, fh.Filename)
-		dst, err := os.Create(destPath)
+		dst, diskName, err := createUniqueFile(dir, fh.Filename)
 		if err != nil {
 			src.Close()
 			return err
@@ -209,7 +210,7 @@ func saveCongViecPhotos(ctx context.Context, tx *sql.Tx, uploadsDir string, cong
 		if copyErr != nil {
 			return copyErr
 		}
-		relPath := filepath.ToSlash(filepath.Join("congviec", strconv.FormatInt(congViecId, 10), fh.Filename))
+		relPath := filepath.ToSlash(filepath.Join("congviec", strconv.FormatInt(congViecId, 10), diskName))
 		contentType := fh.Header.Get("Content-Type")
 		if _, err := tx.ExecContext(ctx, `
 INSERT INTO dbo.CongViecAttachments (CongViecId, FileName, FilePath, ContentType) VALUES (?, ?, ?, ?)`,
@@ -220,10 +221,90 @@ INSERT INTO dbo.CongViecAttachments (CongViecId, FileName, FilePath, ContentType
 	return nil
 }
 
+// createUniqueFile creates name inside dir without ever overwriting an
+// existing file: a second upload of the same name (e.g. two phones both
+// sending "image.jpg", or adding the same photo again while editing) becomes
+// "image (2).jpg", "image (3).jpg"... Overwriting used to leave two
+// attachment rows pointing at one file, so the photo showed twice in the
+// report and deleting either row would have taken the other's image with it.
+func createUniqueFile(dir, name string) (*os.File, string, error) {
+	name = filepath.Base(name)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		name = "anh.jpg"
+	}
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	for i := 1; i < 1000; i++ {
+		candidate := name
+		if i > 1 {
+			candidate = fmt.Sprintf("%s (%d)%s", stem, i, ext)
+		}
+		f, err := os.OpenFile(filepath.Join(dir, candidate), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			return f, candidate, nil
+		}
+		if !os.IsExist(err) {
+			return nil, "", err
+		}
+	}
+	return nil, "", fmt.Errorf("qua nhieu file trung ten %q", name)
+}
+
+// DeleteCongViecAttachment removes one photo from a Công việc row — same
+// permission as editing that row (checkEditOwnership) and refused once the
+// row's report is locked (Kiểm tra/Phê duyệt), like every other change to it.
+// Returns the row's remaining attachments.
+func (e *Env) DeleteCongViecAttachment(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, 400, "id khong hop le")
+		return
+	}
+	attID, err := strconv.Atoi(r.PathValue("attId"))
+	if err != nil {
+		writeErr(w, 400, "id anh khong hop le")
+		return
+	}
+	var createdBy string
+	var ngayBaoCao time.Time
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT ISNULL(CreatedBy,''), NgayBaoCao FROM dbo.CongViec WHERE Id = ?`, id).Scan(&createdBy, &ngayBaoCao); err != nil {
+		writeErr(w, 404, "khong tim thay dong nay")
+		return
+	}
+	if !checkEditOwnership(w, r, createdBy) {
+		return
+	}
+	if !checkNotLocked(w, r, e.DB, ngayBaoCao) {
+		return
+	}
+	var filePath string
+	if err := e.DB.QueryRowContext(r.Context(), `SELECT FilePath FROM dbo.CongViecAttachments WHERE Id = ? AND CongViecId = ?`, attID, id).Scan(&filePath); err != nil {
+		writeErr(w, 404, "khong tim thay anh nay")
+		return
+	}
+	if _, err := e.DB.ExecContext(r.Context(), `DELETE FROM dbo.CongViecAttachments WHERE Id = ? AND CongViecId = ?`, attID, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	// Rows saved before createUniqueFile existed can share one file (same
+	// name uploaded twice) — keep the file while another row still shows it.
+	var stillUsed int
+	e.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM dbo.CongViecAttachments WHERE FilePath = ?`, filePath).Scan(&stillUsed)
+	if stillUsed == 0 {
+		full := filepath.Join(e.UploadsDir, filepath.FromSlash(filePath))
+		// Only ever delete inside this row's own upload folder.
+		rowDir := filepath.Join(e.UploadsDir, "congviec", strconv.Itoa(id)) + string(filepath.Separator)
+		if strings.HasPrefix(filepath.Clean(full), rowDir) {
+			os.Remove(full)
+		}
+	}
+	writeJSON(w, 200, e.loadAttachments(r, id))
+}
+
 // UpdateCongViec expects the same multipart/form-data shape as
 // CreateCongViec. Text fields replace the existing values; any new files
 // under "photos" are appended to the existing attachments (nothing is
-// removed here — deleting individual photos isn't supported yet).
+// removed here — single photos are removed via DeleteCongViecAttachment).
 func (e *Env) UpdateCongViec(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)

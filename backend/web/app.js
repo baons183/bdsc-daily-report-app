@@ -267,6 +267,8 @@ function exitEditMode(form) {
   form.querySelector('button[type=submit]').textContent = "Thêm dòng";
   const cancelBtn = form.querySelector(".cancel-edit-btn");
   if (cancelBtn) cancelBtn.hidden = true;
+  const photos = form.querySelector("#congviec-edit-photos");
+  if (photos) { photos.hidden = true; photos.innerHTML = ""; }
 }
 
 // ---- Bộ lọc danh sách Sự cố / Giám sát / Công việc ----
@@ -508,7 +510,36 @@ function editCongViec(id) {
     thietBi: r.thietBi, dm: r.dm, noiDung: r.noiDung, keHoach: r.keHoach, tienDo: r.tienDo ?? 0,
     homNay: r.homNay, ngayMai: r.ngayMai, deXuat: r.deXuat, luuY: r.luuY, trangThai: r.trangThai,
   });
-  alert("Ảnh cũ vẫn giữ nguyên. Nếu chọn thêm ảnh mới ở đây, ảnh mới sẽ được thêm vào (không thay ảnh cũ).");
+  renderCongViecEditPhotos(id);
+}
+// Ảnh hiện có của dòng đang sửa, mỗi ảnh có nút ✕ xoá ngay (gọi API luôn,
+// không đợi bấm Cập nhật). Ảnh chọn thêm ở ô Hình ảnh vẫn được thêm vào khi
+// bấm Cập nhật.
+function renderCongViecEditPhotos(id) {
+  const box = document.getElementById("congviec-edit-photos");
+  const r = ROWS_CACHE.congviec[id];
+  const atts = (r && r.attachments) || [];
+  box.hidden = false;
+  box.innerHTML = atts.length === 0
+    ? '<span style="color:#888">Dòng này chưa có ảnh.</span>'
+    : `<div style="margin-bottom:4px">Ảnh hiện có (bấm ✕ để xoá ảnh; ảnh chọn thêm ở trên sẽ được thêm vào khi bấm Cập nhật):</div>` +
+      atts.map(a => `<span class="edit-photo"><a href="/uploads/${esc(a.filePath)}" target="_blank"><img src="/uploads/${esc(a.filePath)}" title="${esc(a.fileName)}"></a>` +
+        `<button type="button" title="Xoá ảnh này" onclick="deleteCongViecPhoto(${id}, ${a.id})">✕</button></span>`).join("");
+}
+async function deleteCongViecPhoto(id, attId) {
+  if (!confirm("Xoá ảnh này?")) return;
+  let remaining;
+  try {
+    remaining = await api(`/api/congviec/${id}/attachments/${attId}`, { method: "DELETE" });
+  } catch (e) {
+    alert("Không xoá được ảnh: " + e.message);
+    return;
+  }
+  if (ROWS_CACHE.congviec[id]) ROWS_CACHE.congviec[id].attachments = remaining || [];
+  const row = LIST_ROWS.congviec.find(x => x.id === id);
+  if (row) row.attachments = remaining || [];
+  renderCongViecEditPhotos(id);
+  renderCongViecToday();
 }
 document.getElementById("form-congviec").addEventListener("submit", async e => {
   e.preventDefault();

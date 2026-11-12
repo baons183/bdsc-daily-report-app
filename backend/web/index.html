@@ -43,6 +43,10 @@
   #bootScreen, #noRoleScreen { display: flex; height: 100vh; align-items: center; justify-content: center; }
   #loginBox { background: #fff; padding: 30px; border-radius: 8px; width: 320px; box-shadow: 0 2px 8px rgba(0,0,0,.15); text-align: center; }
   .thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 3px; margin: 2px; }
+  .edit-photo { position: relative; display: inline-block; margin: 4px 6px 4px 0; }
+  .edit-photo img { width: 96px; height: 72px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; display: block; }
+  .edit-photo button { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: none;
+    background: #c0392b; color: #fff; font-size: 14px; line-height: 24px; padding: 0; cursor: pointer; }
   .kpi-table { text-align: center; }
   .kpi-table th { text-align: center; vertical-align: middle; }
   .kpi-table td { text-align: center; vertical-align: middle; }
@@ -162,6 +166,7 @@
           <option value="done">Hoàn thành</option>
         </select></label>
         <label class="full">Hình ảnh<input name="photos" type="file" multiple accept="image/*"></label>
+        <div class="full" id="congviec-edit-photos" hidden></div>
         <div class="full"><button class="btn" type="submit">Thêm dòng</button></div>
       </form>
       <div id="filter-congviec" style="margin:14px 0 8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;"></div>

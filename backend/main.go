@@ -64,6 +64,7 @@ func main() {
 	mux.Handle("POST /api/congviec", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.CreateCongViec))))
 	mux.Handle("PUT /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.UpdateCongViec))))
 	mux.Handle("DELETE /api/congviec/{id}", authMw(http.HandlerFunc(auth.RequireRole("CongViec", env.DeleteCongViec))))
+	mux.Handle("DELETE /api/congviec/{id}/attachments/{attId}", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.DeleteCongViecAttachment))))
 	mux.Handle("POST /api/congviec/{id}/trangthai", authMw(http.HandlerFunc(auth.RequireEditRole("CongViec", env.SetCongViecTrangThai))))
 
 	mux.Handle("GET /api/kpi", authMw(http.HandlerFunc(env.ListKPI)))
